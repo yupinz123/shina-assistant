@@ -3,160 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Next Shina Assistant</title>
+    <title>Next Shina Assist</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body class="bg-slate-50 pb-24">
-    <header class="sticky top-0 bg-white/90 backdrop-blur-md border-b p-4 flex justify-between items-center z-10 shadow-sm">
-        <h1 class="text-xl font-black text-slate-800 tracking-tighter">SHINA ASSIST</h1>
+
+    <header class="p-4 bg-white shadow-sm flex justify-between items-center">
+        <h1 class="text-xl font-black text-slate-800">SHINA ASSIST v2</h1>
         <button id="gearBtn" class="p-2 text-2xl">⚙️</button>
     </header>
 
-    <section class="p-4 bg-white border-b sticky top-[65px] z-10">
-        <div class="flex gap-2">
-            <input type="number" id="barcodeInput" placeholder="JAN/POPスキャン" 
-                   class="flex-1 border-2 border-slate-200 p-4 rounded-2xl text-xl outline-none focus:border-blue-500" inputmode="numeric">
-            <button onclick="handleInput()" class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold active:scale-95 transition-transform">追加</button>
-        </div>
-    </section>
+    <div class="p-4">
+        <div id="reader" class="hidden rounded-2xl overflow-hidden mb-4"></div>
+        <button id="scanStartBtn" onclick="startScanner()" class="w-full bg-blue-600 text-white p-5 rounded-3xl font-bold text-xl shadow-lg active:scale-95 transition-all">
+            📷 バーコードをスキャン
+        </button>
+    </div>
 
-    <main id="taskList" class="p-4 space-y-4">
-        </main>
-
-    <section class="p-4 border-t bg-slate-100 space-y-4">
-        <div>
-            <h2 class="text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest">在庫無</h2>
-            <div id="outOfStockList" class="space-y-2 opacity-80"></div>
-        </div>
-        <div>
-            <h2 class="text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest">運搬済</h2>
-            <div id="carriedList" class="space-y-2 opacity-60"></div>
-        </div>
-    </section>
+    <main id="taskList" class="p-4 space-y-4"></main>
 
     <div id="settingsMenu" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center z-50 p-6">
-        <div class="bg-white p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl">
-            <h2 class="text-xl font-bold mb-6">設定</h2>
-            <button onclick="resetDailyTasks()" class="w-full bg-red-500 text-white p-5 rounded-2xl font-bold mb-4">今日のタスクをリセット</button>
-            <button onclick="toggleSettings()" class="w-full bg-slate-200 p-4 rounded-2xl font-bold">閉じる</button>
+        <div class="bg-white p-8 rounded-3xl w-full max-w-sm">
+            <button onclick="resetDailyTasks()" class="w-full bg-red-500 text-white p-5 rounded-2xl font-bold mb-4">タスクを全リセット</button>
+            <button onclick="toggleSettings()" class="w-full bg-slate-200 p-4 rounded-2xl">閉じる</button>
         </div>
     </div>
 
     <script>
-        const API_URL = "http://100.83.116.6:8000/search"; // SurfaceのIP
+        const API_URL = "http://100.83.116.6:8000/search";
         let mappings = JSON.parse(localStorage.getItem('shina_mappings') || '{}');
-        let blacklist = JSON.parse(localStorage.getItem('shina_blacklist') || '[]');
         let tasks = [];
+        let html5QrCode;
 
-        async function handleInput() {
-            const inputField = document.getElementById('barcodeInput');
-            const code = inputField.value.trim();
-            if (!code) return;
+        // 商品名のクリーンアップ機能
+        function cleanName(name) {
+            if (!name) return "不明な商品";
+            return name.replace(/ - Yahoo!ショッピング| - タジマヤ| \| .*|の商品をすべて見る.*|検索結果一覧/g, "").trim();
+        }
 
-            // 在庫無アラート
-            if (blacklist.includes(code)) {
-                if(!confirm("⚠️ 前回「在庫無」だった商品です。追加しますか？")) {
-                    inputField.value = ""; return;
+        // 部門ごとの色判定 
+        function getCategoryColor(name) {
+            if (name.includes("乳製品") || name.includes("日配")) return "border-pink-500"; // 106
+            if (name.includes("菓子") || name.includes("おやつ")) return "border-orange-500"; // 108
+            return "border-blue-500"; // 107
+        }
+
+        async function startScanner() {
+            const readerDiv = document.getElementById('reader');
+            readerDiv.classList.remove('hidden');
+            document.getElementById('scanStartBtn').classList.add('hidden');
+            
+            html5QrCode = new Html5Qrcode("reader");
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 150 } },
+                (decodedText) => {
+                    handleScannedCode(decodedText);
+                    stopScanner();
                 }
-            }
+            );
+        }
 
-            // POPコード（7桁）からJAN（13桁）への紐付け解決
+        function stopScanner() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('reader').classList.add('hidden');
+                    document.getElementById('scanStartBtn').classList.remove('hidden');
+                });
+            }
+        }
+
+        async function handleScannedCode(code) {
             let jan = code;
             if (code.length === 7) {
-                if (mappings[code]) {
-                    jan = mappings[code].jan;
-                } else {
-                    const linkedJan = prompt("新しいPOPコードです。商品バーコード(13桁)をスキャン/入力して紐付けてください。");
-                    if (linkedJan) {
-                        mappings[code] = { jan: linkedJan, name: "検索中..." };
-                        jan = linkedJan;
-                    }
-                }
+                jan = mappings[code]?.jan || prompt("POPコードです。JAN(13桁)を入力してください");
+                if (jan && !mappings[code]) mappings[code] = { jan };
             }
 
-            const newTask = {
-                id: Date.now(),
-                code: jan,
-                popCode: code.length === 7 ? code : "",
-                name: mappings[jan]?.name || "検索中...",
-                image: mappings[jan]?.image || null,
-                qty: "",
-                status: 'todo'
-            };
-
+            const newTask = { id: Date.now(), code: jan, name: mappings[jan]?.name || "検索中...", image: mappings[jan]?.image || null, qty: "", status: 'todo' };
             tasks.unshift(newTask);
             render();
-            inputField.value = "";
 
-            // APIから詳細取得（学習機能）
             if (!mappings[jan]?.name || mappings[jan].name === "検索中...") {
                 try {
                     const res = await fetch(`${API_URL}?code=${jan}`);
                     const data = await res.json();
-                    
-                    const info = { jan, name: data.name, image: data.image };
-                    mappings[jan] = info;
-                    if (newTask.popCode) mappings[newTask.popCode] = info;
+                    const cleaned = cleanName(data.name);
+                    mappings[jan] = { jan, name: cleaned, image: data.image };
                     localStorage.setItem('shina_mappings', JSON.stringify(mappings));
-                    
                     const t = tasks.find(t => t.id === newTask.id);
-                    t.name = data.name; t.image = data.image;
+                    t.name = cleaned; t.image = data.image;
                     render();
-                } catch (e) {
-                    tasks.find(t => t.id === newTask.id).name = "API未起動";
-                    render();
-                }
+                } catch (e) { console.error(e); }
             }
         }
 
         function render() {
             const list = document.getElementById('taskList');
-            const outList = document.getElementById('outOfStockList');
-            const carriedList = document.getElementById('carriedList');
-            list.innerHTML = ""; outList.innerHTML = ""; carriedList.innerHTML = "";
-
+            list.innerHTML = "";
             tasks.forEach(task => {
                 const card = document.createElement('div');
-                card.className = `bg-white p-4 rounded-3xl shadow-sm border-2 flex gap-4 ${task.status === 'todo' ? 'border-transparent' : 'border-slate-200'}`;
-                
-                const img = task.image ? `<img src="${task.image}" class="w-16 h-16 object-contain rounded-lg">` : `<div class="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">NO IMG</div>`;
-
+                const borderColor = getCategoryColor(task.name);
+                card.className = `bg-white p-4 rounded-3xl shadow-sm border-l-8 ${borderColor} flex gap-4 animate-pulse-once`;
                 card.innerHTML = `
-                    ${img}
+                    <img src="${task.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 object-contain rounded-xl bg-slate-50">
                     <div class="flex-1">
                         <h3 class="font-bold text-sm leading-tight">${task.name}</h3>
-                        <p class="text-[10px] text-slate-400 font-mono">${task.code} ${task.popCode ? `[POP:${task.popCode}]` : ''}</p>
-                        <div class="mt-2 flex items-center gap-2">
-                            <input type="number" value="${task.qty}" onchange="updateQty(${task.id}, this.value)" 
-                                   class="w-14 p-2 bg-slate-100 rounded-lg text-center font-bold" inputmode="numeric">
-                            ${task.status === 'todo' ? `
-                                <button onclick="updateStatus(${task.id}, 'carried')" class="flex-1 bg-green-500 text-white py-2 rounded-lg font-bold text-sm">運搬済</button>
-                                <button onclick="updateStatus(${task.id}, 'none')" class="bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold text-sm">在庫無</button>
-                            ` : `
-                                <button onclick="updateStatus(${task.id}, 'todo')" class="flex-1 border border-slate-300 text-slate-500 py-2 rounded-lg font-bold text-sm">戻す</button>
-                            `}
+                        <div class="mt-3 flex items-center gap-2">
+                            <input type="number" value="${task.qty}" onchange="updateQty(${task.id}, this.value)" class="w-16 p-2 bg-slate-100 rounded-xl text-center font-bold" inputmode="numeric">
+                            <button onclick="updateStatus(${task.id}, 'done')" class="flex-1 bg-green-500 text-white py-2 rounded-xl font-bold">運搬済</button>
+                            <button onclick="updateStatus(${task.id}, 'none')" class="bg-slate-200 text-slate-600 px-3 py-2 rounded-xl font-bold">在庫無</button>
                         </div>
                     </div>
                 `;
-
-                if (task.status === 'todo') list.appendChild(card);
-                else if (task.status === 'none') outList.appendChild(card);
-                else carriedList.appendChild(card);
+                list.appendChild(card);
             });
         }
 
         function updateQty(id, val) { tasks.find(t => t.id === id).qty = val; }
-        function updateStatus(id, s) {
-            const t = tasks.find(t => t.id === id);
-            t.status = s;
-            if (s === 'none' && !blacklist.includes(t.code)) {
-                blacklist.push(t.code);
-                localStorage.setItem('shina_blacklist', JSON.stringify(blacklist));
-            }
-            render();
-        }
+        function updateStatus(id, s) { tasks = tasks.filter(t => t.id !== id); render(); }
         function toggleSettings() { document.getElementById('settingsMenu').classList.toggle('hidden'); }
-        function resetDailyTasks() { if (confirm("リセットしますか？")) { tasks = []; render(); toggleSettings(); } }
+        function resetDailyTasks() { tasks = []; render(); toggleSettings(); }
         document.getElementById('gearBtn').onclick = toggleSettings;
     </script>
 </body>
