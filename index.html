@@ -12,63 +12,57 @@
         .category-108 { border-left: 8px solid #f97316; } /* 菓子 */
     </style>
 </head>
-<body class="bg-slate-50 pb-32">
-    <header class="sticky top-0 bg-white shadow-sm flex justify-between items-center p-4 z-20">
-        <h1 class="text-xl font-black">SHINA ASSIST v2</h1>
+<body class="bg-slate-50 pb-40">
+    <header class="sticky top-0 bg-white/90 backdrop-blur shadow-sm p-4 flex justify-between items-center z-30">
+        <h1 class="text-xl font-black text-slate-800">SHINA ASSIST v2</h1>
         <button id="gearBtn" class="text-2xl">⚙️</button>
     </header>
 
-    <div class="sticky top-[65px] bg-white border-b p-4 z-10 space-y-2">
+    <div class="sticky top-[65px] bg-white border-b p-4 z-20 space-y-3">
         <div id="reader" class="hidden rounded-2xl overflow-hidden bg-black aspect-video"></div>
         <div class="flex gap-2">
-            <input type="number" id="barcodeInput" placeholder="JAN/POP手入力" class="flex-1 border-2 p-4 rounded-2xl text-xl" inputmode="numeric">
-            <button onclick="handleInput(document.getElementById('barcodeInput').value)" class="bg-blue-600 text-white px-6 rounded-2xl font-bold">追加</button>
+            <input type="number" id="barcodeInput" placeholder="JAN/POP手入力" class="flex-1 border-2 p-4 rounded-2xl text-xl outline-none focus:border-blue-500" inputmode="numeric">
+            <button onclick="handleInput(document.getElementById('barcodeInput').value)" class="bg-blue-600 text-white px-8 rounded-2xl font-bold active:scale-95 transition-all">追加</button>
         </div>
-        <button onclick="toggleScanner()" class="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2">
-            📷 カメラでスキャン
+        <button onclick="toggleScanner()" class="w-full bg-slate-800 text-white py-5 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg active:bg-slate-700">
+            📷 バーコードをスキャン
         </button>
     </div>
 
     <main id="taskList" class="p-4 space-y-4"></main>
 
-    <div class="p-4 bg-slate-100 border-t space-y-6">
+    <div class="p-4 bg-slate-100 border-t space-y-8">
         <div>
-            <h2 class="text-sm font-bold text-slate-500 mb-2 px-2">【在庫無】</h2>
-            <div id="outOfStockList" class="space-y-2 opacity-80"></div>
+            <h2 class="text-xs font-bold text-slate-400 mb-3 px-2 tracking-widest uppercase">【在庫無リスト】</h2>
+            <div id="outOfStockList" class="space-y-3"></div>
         </div>
         <div>
-            <h2 class="text-sm font-bold text-slate-500 mb-2 px-2">【運搬済】</h2>
-            <div id="carriedList" class="space-y-2 opacity-60"></div>
-        </div>
-    </div>
-
-    <div id="settingsMenu" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center z-50 p-6">
-        <div class="bg-white p-8 rounded-3xl w-full max-w-sm">
-            <button onclick="resetDailyTasks()" class="w-full bg-red-500 text-white p-5 rounded-2xl font-bold">今日のデータをリセット</button>
-            <button onclick="toggleSettings()" class="mt-4 w-full text-slate-500">閉じる</button>
+            <h2 class="text-xs font-bold text-slate-400 mb-3 px-2 tracking-widest uppercase">【運搬済リスト】</h2>
+            <div id="carriedList" class="space-y-3"></div>
         </div>
     </div>
 
     <script>
         const API_URL = "http://100.83.116.6:8000/search";
         let mappings = JSON.parse(localStorage.getItem('shina_mappings') || '{}');
-        let blacklist = JSON.parse(localStorage.getItem('shina_blacklist') || '[]');
         let tasks = [];
         let html5QrCode;
-
-        function cleanName(name) {
-            return name.replace(/ - Yahoo!ショッピング| - タジマヤ| \| .*|の商品をすべて見る.*|検索結果一覧/g, "").trim();
-        }
 
         async function toggleScanner() {
             const readerDiv = document.getElementById('reader');
             if (readerDiv.classList.contains('hidden')) {
                 readerDiv.classList.remove('hidden');
                 html5QrCode = new Html5Qrcode("reader");
-                // 精度向上のための設定
-                await html5QrCode.start({ facingMode: "environment" }, 
-                { fps: 20, qrbox: { width: 250, height: 150 }, formatsToSupport: [ Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8 ] }, 
-                (text) => { handleInput(text); toggleScanner(); });
+                // 精度向上のためのフォーマット指定
+                const config = { 
+                    fps: 20, 
+                    qrbox: { width: 280, height: 160 },
+                    formatsToSupport: [ Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8 ] 
+                };
+                await html5QrCode.start({ facingMode: "environment" }, config, (text) => {
+                    handleInput(text);
+                    toggleScanner();
+                });
             } else {
                 await html5QrCode.stop();
                 readerDiv.classList.add('hidden');
@@ -78,10 +72,6 @@
         async function handleInput(code) {
             if (!code) return;
             document.getElementById('barcodeInput').value = "";
-            if (blacklist.includes(code)) {
-                if(!confirm("⚠️ 前回「在庫無」でした。追加しますか？")) return;
-            }
-
             let jan = code;
             if (code.length === 7) {
                 jan = mappings[code]?.jan || prompt("POPコードです。JAN(13桁)を入力");
@@ -90,7 +80,6 @@
 
             const newTask = {
                 id: Date.now(), code: jan, 
-                popCode: code.length === 7 ? code : "",
                 name: mappings[jan]?.name || "検索中...",
                 image: mappings[jan]?.image || null,
                 qty: "", status: 'todo'
@@ -102,11 +91,10 @@
                 try {
                     const res = await fetch(`${API_URL}?code=${jan}`);
                     const data = await res.json();
-                    const cleaned = cleanName(data.name);
-                    mappings[jan] = { jan, name: cleaned, image: data.image };
+                    mappings[jan] = { jan, name: data.name, image: data.image };
                     localStorage.setItem('shina_mappings', JSON.stringify(mappings));
                     const t = tasks.find(t => t.id === newTask.id);
-                    t.name = cleaned; t.image = data.image;
+                    if (t) { t.name = data.name; t.image = data.image; }
                     render();
                 } catch (e) { console.error(e); }
             }
@@ -122,30 +110,30 @@
 
             tasks.forEach(task => {
                 const card = document.createElement('div');
-                card.className = `bg-white p-4 rounded-3xl shadow-sm flex gap-3 ${task.status === 'todo' ? '' : 'scale-95'}`;
+                card.className = `bg-white p-4 rounded-3xl shadow-sm flex gap-4 transition-all ${task.status === 'todo' ? 'scale-100' : 'scale-95 opacity-80'}`;
                 
-                // 部門色分け
+                // 部門判定
                 if (task.name.includes("乳") || task.name.includes("和菓子")) card.classList.add('category-106');
                 else if (task.name.includes("菓子")) card.classList.add('category-108');
                 else card.classList.add('category-107');
 
                 card.innerHTML = `
-                    <div class="relative">
-                        <img src="${task.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 object-contain rounded-xl bg-slate-50">
-                        <label class="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow border cursor-pointer text-xs">
+                    <div class="relative min-w-[70px]">
+                        <img src="${task.image || 'https://via.placeholder.com/100'}" class="w-16 h-16 object-contain rounded-xl bg-slate-50 border shadow-inner">
+                        <label class="absolute -bottom-1 -right-1 bg-white rounded-full p-2 shadow-md border cursor-pointer text-xs">
                             📷<input type="file" accept="image/*" class="hidden" onchange="updatePhoto(${task.id}, event)">
                         </label>
                     </div>
-                    <div class="flex-1">
-                        <h3 class="font-bold text-sm leading-tight">${task.name}</h3>
-                        <p class="text-[10px] text-slate-400 font-mono">${task.code}</p>
-                        <div class="mt-2 flex items-center gap-2">
-                            <input type="number" value="${task.qty}" onchange="updateQty(${task.id}, this.value)" class="w-14 p-2 bg-slate-100 rounded-lg text-center font-bold text-lg" inputmode="numeric">
+                    <div class="flex-1 overflow-hidden">
+                        <h3 class="font-bold text-sm leading-tight line-clamp-2">${task.name}</h3>
+                        <p class="text-[10px] text-slate-400 font-mono mt-1">${task.code}</p>
+                        <div class="mt-3 flex items-center gap-2">
+                            <input type="number" value="${task.qty}" onchange="updateQty(${task.id}, this.value)" class="w-14 p-2 bg-slate-100 rounded-xl text-center font-bold text-lg" inputmode="numeric">
                             ${task.status === 'todo' ? `
-                                <button onclick="updateStatus(${task.id}, 'done')" class="flex-1 bg-green-500 text-white py-2 rounded-xl font-bold">運搬済</button>
-                                <button onclick="updateStatus(${task.id}, 'none')" class="bg-slate-200 text-slate-600 px-3 py-2 rounded-xl font-bold">在庫無</button>
+                                <button onclick="updateStatus(${task.id}, 'done')" class="flex-1 bg-green-500 text-white py-3 rounded-xl font-bold shadow-sm">運搬済</button>
+                                <button onclick="updateStatus(${task.id}, 'none')" class="bg-slate-200 text-slate-600 px-4 py-3 rounded-xl font-bold">在庫無</button>
                             ` : `
-                                <button onclick="updateStatus(${task.id}, 'todo')" class="flex-1 border border-slate-300 text-slate-500 py-2 rounded-xl font-bold text-xs">戻す</button>
+                                <button onclick="updateStatus(${task.id}, 'todo')" class="flex-1 border-2 border-slate-300 text-slate-500 py-2 rounded-xl font-bold text-xs">戻す</button>
                             `}
                         </div>
                     </div>
@@ -156,6 +144,7 @@
 
         function updatePhoto(id, event) {
             const file = event.target.files[0];
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
                 const b64 = e.target.result;
@@ -168,17 +157,9 @@
             reader.readAsDataURL(file);
         }
 
-        function updateQty(id, val) { tasks.find(t => t.id === id).qty = val; }
-        function updateStatus(id, s) { 
-            const t = tasks.find(t => t.id === id); t.status = s; 
-            if (s === 'none' && !blacklist.includes(t.code)) {
-                blacklist.push(t.code); localStorage.setItem('shina_blacklist', JSON.stringify(blacklist));
-            }
-            render(); 
-        }
-        function toggleSettings() { document.getElementById('settingsMenu').classList.toggle('hidden'); }
-        function resetDailyTasks() { if(confirm("リセットしますか？")) { tasks = []; render(); toggleSettings(); } }
-        document.getElementById('gearBtn').onclick = toggleSettings;
+        function updateQty(id, val) { const t = tasks.find(t => t.id === id); if(t) t.qty = val; }
+        function updateStatus(id, s) { const t = tasks.find(t => t.id === id); if(t) t.status = s; render(); }
+        function toggleSettings() { /* ... */ }
     </script>
 </body>
 </html>

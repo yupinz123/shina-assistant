@@ -1,80 +1,36 @@
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
 import requests
 from bs4 import BeautifulSoup
 import re
-import urllib.parse
 
-app = FastAPI()
-
-# スマホ（Galaxy S25）からアクセスを許可するための設定
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+# 検索結果を綺麗にする関数
 def clean_product_name(raw_name):
-    """商品名をきれいにするお掃除機能"""
     if not raw_name: return "不明な商品"
-    # 不要なワードを削る
-    junk_patterns = [
-        r" - Yahoo!ショッピング", r" - タジマヤ", r" \| .*", r"：.*", 
-        r" < .*", r" - Amazon", r"公式サイト", r"検索結果一覧", r"JANコード.*"
-    ]
+    # 不要なワードを徹底削除
+    junk = [r" - Yahoo!ショッピング", r" - タジマヤ", r" \| .*", r"：.*", r"の商品をすべて見る.*", r"（\d+件）"]
     name = raw_name
-    for pattern in junk_patterns:
-        name = re.sub(pattern, "", name)
+    for p in junk:
+        name = re.sub(p, "", name)
     return name.strip()
 
-@app.get("/search")
-def search_product(code: str = Query(..., min_length=7)):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
-    }
+def get_product_details(code):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."}
     
-    # --- 1. Co-op公式サイト (PB商品) ---
-    coop_url = f"https://mdinfo.jccu.coop/bb/shohindetail/{code}/"
+    # JANコードで検索した時の「最初の商品」をピンポイントで狙う
+    url = f"https://shopping.yahoo.co.jp/search?p={code}"
     try:
-        res = requests.get(coop_url, headers=headers, timeout=5)
-        if res.status_code == 200 and "検索結果一覧" not in res.text:
-            soup = BeautifulSoup(res.text, 'html.parser')
-            name = clean_product_name(soup.title.string)
-            # 画像取得：id="main_img" を探す
-            img_tag = soup.find("img", id="main_img")
-            img_url = urllib.parse.urljoin(coop_url, img_tag.get("src")) if img_tag else None
-            return {"name": name, "image": img_url, "source": "coop", "detail_url": coop_url}
-    except: pass
-
-    # --- 2. Yahoo!検索 (NB商品・画像も頑張る) ---
-    # ブロックを避けるために通常の検索ページから画像を抽出
-    yahoo_url = f"https://search.yahoo.co.jp/search?p={code}"
-    try:
-        res = requests.get(yahoo_url, headers=headers, timeout=5)
+        res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # 名前取得
-        name_tag = soup.select_one('h3')
-        name = clean_product_name(name_tag.get_text()) if name_tag else "不明な商品"
-        
-        # 画像取得（Yahoo検索のサムネイルを狙う）
-        # 検索結果に紐付く画像があれば取得
-        img_tag = soup.find("img")
-        img_url = img_tag.get("src") if img_tag else None
-        
-        # 画像が取れない場合の予備検索リンク
-        search_link = f"https://www.google.com/search?q={code}&tbm=isch"
-        
-        return {
-            "name": name, 
-            "image": img_url, 
-            "source": "net", 
-            "search_link": search_link if not img_url else None
-        }
-    except: pass
+        # 商品名が入っているタグをより正確に指定
+        # Yahooショッピングの検索結果の1件目を抽出
+        item = soup.select_one('li.LoopList__item')
+        if item:
+            name_tag = item.select_one('.SearchResultItemTitle__name')
+            img_tag = item.select_one('img')
+            
+            if name_tag:
+                return clean_product_name(name_tag.get_text()), img_tag.get("src")
+    except:
+        pass
 
-    return {"name": "見つかりませんでした", "image": None}
-
-# サーバー起動用（VS Codeのターミナルで実行）
-# uvicorn main:app --reload
+    return "商品名が見つかりませんでした", None
