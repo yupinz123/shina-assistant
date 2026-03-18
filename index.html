@@ -1,205 +1,1148 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>品出しアシスタント Pro</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;900&display=swap" rel="stylesheet">
-  <!-- ZXing バーコードスキャナーライブラリ -->
-  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>品出しアシスタント Pro</title>
+<style>
+/* =====================================================
+   品出しアシスタント Pro - 完全スタンドアロン版
+   外部CDN・外部CSS完全ゼロ
+   ===================================================== */
+:root {
+  --bg:#181A1B; --bg2:#23272A; --bg3:#2c2f36;
+  --accent:#3B82F6; --accent2:#6366f1;
+  --success:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+  --text:#F3F4F6; --text2:#9CA3AF; --text3:#6B7280;
+  --border:rgba(255,255,255,0.09);
+  --shadow:0 4px 24px rgba(0,0,0,0.4);
+  --r:1.1rem; --rs:0.7rem;
+  --tr:0.16s ease;
+  --dept-daily:#ec4899; --dept-snack:#a855f7;
+  --dept-food:#3B82F6; --dept-other:#6B7280;
+}
+body.light{
+  --bg:#f0f2f5; --bg2:#fff; --bg3:#e5e7eb;
+  --text:#111827; --text2:#374151; --text3:#6B7280;
+  --border:rgba(0,0,0,0.09); --shadow:0 4px 24px rgba(0,0,0,0.1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic','Meiryo',sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent;overflow-x:hidden;font-size:14px}
+
+/* ヘッダー */
+.hdr{background:var(--bg2);position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.3);border-bottom:1px solid var(--border)}
+.hdr-in{max-width:960px;margin:0 auto;padding:.55rem .8rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.hdr-ttl{font-size:1rem;font-weight:900;color:var(--accent);white-space:nowrap;display:flex;align-items:center;gap:.3rem}
+.tabs{display:flex;gap:.3rem;flex:1;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{background:var(--bg3);color:var(--text2);border:1.5px solid transparent;border-radius:9px;padding:.4rem .85rem;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:all var(--tr);font-family:inherit}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 10px rgba(59,130,246,.35)}
+.tab#tab-scanner.active{background:linear-gradient(135deg,#6366f1,#8b5cf6);border-color:#6366f1}
+.hdr-right{display:flex;align-items:center;gap:.35rem;margin-left:auto}
+.subtab{background:var(--bg3);color:var(--text2);border:1.5px solid transparent;border-radius:8px;padding:.38rem .7rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:all var(--tr);font-family:inherit}
+.subtab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cfg-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:.42rem .55rem;font-size:1rem;cursor:pointer;transition:all var(--tr);line-height:1}
+.cfg-btn:active{transform:scale(.9)}
+
+/* メイン */
+.main{max-width:960px;margin:0 auto;padding:.8rem .7rem 6rem}
+
+/* 検索 */
+.srch-area{display:flex;align-items:center;gap:.45rem;margin-bottom:.9rem;flex-wrap:wrap}
+#search-box{flex:1;min-width:160px;background:var(--bg2);color:var(--text);border:1.5px solid var(--border);border-radius:11px;padding:.55rem .9rem;font-size:.9rem;font-family:inherit;outline:none;transition:border var(--tr)}
+#search-box:focus{border-color:var(--accent)}
+.pcat-wrap{display:flex;gap:.25rem;flex-wrap:wrap}
+.pcat-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:18px;padding:.3rem .7rem;font-size:.76rem;font-weight:700;cursor:pointer;transition:all var(--tr);font-family:inherit}
+.pcat-btn.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+
+/* スキャナー */
+.scan-card{background:var(--bg2);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden;margin-bottom:1.2rem}
+.scan-hdr{background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:1rem 1.3rem .85rem}
+.scan-hdr h2{font-size:1.15rem;font-weight:700;color:#fff;margin-bottom:.2rem}
+.scan-hdr p{font-size:.8rem;color:rgba(255,255,255,.75)}
+.cam-area{position:relative;background:#000;overflow:hidden;height:220px}
+#scan-video{width:100%;height:100%;object-fit:cover;display:none}
+#scan-video.on{display:block}
+.cam-ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text3);gap:.4rem}
+.cam-ph-icon{font-size:2.8rem}
+.cam-ph p{font-size:.85rem}
+.scan-ov{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.scan-ov.on{display:flex}
+.scan-frame{width:200px;height:110px;border:2.5px solid rgba(99,246,180,.9);border-radius:10px;position:relative;overflow:hidden;box-shadow:0 0 0 2000px rgba(0,0,0,.42)}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:rgba(99,246,180,.9);animation:scanMove 1.8s linear infinite}
+@keyframes scanMove{0%{top:0}50%{top:100%}100%{top:0}}
+.scan-hint{color:rgba(255,255,255,.82);font-size:.77rem;margin-top:.7rem;text-align:center}
+.scan-ctrls{padding:.85rem 1rem .5rem;display:flex;gap:.45rem;flex-wrap:wrap}
+.sbtn{border:none;border-radius:9px;padding:.65rem 1.1rem;font-size:.88rem;font-weight:700;cursor:pointer;transition:all var(--tr);font-family:inherit}
+.sbtn:active{transform:scale(.95)}
+.sbtn.prim{background:var(--accent);color:#fff;flex:1}
+.sbtn.stop{background:var(--danger);color:#fff}
+.sbtn.sw{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.sbtn.sm{padding:.55rem .9rem;flex:0 0 auto}
+.manual-area{padding:.45rem 1rem .9rem;border-top:1px solid var(--border)}
+.manual-area p{font-size:.78rem;color:var(--text3);margin-bottom:.45rem}
+.manual-row{display:flex;gap:.4rem}
+#manual-in{flex:1;background:var(--bg3);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:.55rem .9rem;font-size:.95rem;font-family:inherit;outline:none;transition:border var(--tr)}
+#manual-in:focus{border-color:var(--accent2)}
+/* 結果エリア */
+.res-area{padding:.9rem 1rem;border-top:2px solid var(--accent);background:rgba(59,130,246,.04);display:none}
+.res-area.on{display:block}
+.res-hdr{display:flex;align-items:center;gap:.4rem;margin-bottom:.7rem;font-size:.85rem;color:var(--text2)}
+.res-card{display:flex;gap:.9rem;align-items:flex-start}
+.res-img-wrap{position:relative;flex-shrink:0}
+#res-img{width:88px;height:88px;object-fit:cover;border-radius:var(--rs);background:var(--bg3);display:block}
+.photo-lbl{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.62);color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:.8rem;cursor:pointer;transition:background var(--tr)}
+.photo-lbl:hover{background:var(--accent)}
+.res-info{flex:1}
+#res-name{font-size:.95rem;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:.25rem}
+.res-dept{font-size:.72rem;font-weight:700;padding:.18rem .55rem;border-radius:18px;display:inline-block;margin-bottom:.55rem}
+.res-dept.daily{background:rgba(236,72,153,.2);color:var(--dept-daily)}
+.res-dept.snack{background:rgba(168,85,247,.2);color:var(--dept-snack)}
+.res-dept.food{background:rgba(59,130,246,.2);color:var(--dept-food)}
+.res-dept.other{background:rgba(107,114,128,.2);color:var(--dept-other)}
+.qty-row{display:flex;align-items:center;gap:.45rem;margin-bottom:.55rem}
+.qty-lbl{font-size:.82rem;color:var(--text3)}
+.qty-btn{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:7px;width:34px;height:34px;font-size:1.1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--tr);font-family:inherit}
+.qty-btn:active{transform:scale(.88);background:var(--accent);color:#fff}
+#res-qty{width:48px;text-align:center;background:var(--bg3);color:var(--text);border:1.5px solid var(--border);border-radius:7px;padding:.35rem;font-size:.95rem;font-family:inherit;font-weight:700;outline:none}
+.res-acts{display:flex;gap:.38rem;flex-wrap:wrap}
+.act-btn{flex:1;border:none;border-radius:9px;padding:.6rem .4rem;font-size:.8rem;font-weight:700;cursor:pointer;transition:all var(--tr);font-family:inherit;min-width:75px}
+.act-btn:active{transform:scale(.95)}
+.act-btn.ok{background:var(--success);color:#fff}
+.act-btn.ng{background:var(--danger);color:#fff}
+.known-badge{margin-top:.45rem;background:rgba(251,191,36,.15);color:#f59e0b;border-radius:7px;padding:.25rem .65rem;font-size:.77rem;font-weight:700;display:none}
+.known-badge.on{display:block}
+.ld{display:none;align-items:center;gap:.45rem;margin-top:.45rem;color:var(--text3);font-size:.82rem}
+.ld.on{display:flex}
+.spin{width:17px;height:17px;border:2.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .65s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* スキャン履歴 */
+.hist-area{margin-top:.5rem}
+.sec-ttl{font-size:1rem;font-weight:700;color:var(--text);margin:1.2rem 0 .7rem}
+.hist-list{display:flex;flex-direction:column;gap:.45rem}
+.hist-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);padding:.65rem .85rem;display:flex;align-items:center;gap:.7rem;cursor:pointer;transition:all var(--tr)}
+.hist-item:active{transform:scale(.98)}
+.hist-img{width:48px;height:48px;object-fit:cover;border-radius:7px;background:var(--bg3);flex-shrink:0}
+.hist-info{flex:1;min-width:0}
+.hist-name{font-size:.87rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-code{font-size:.72rem;color:var(--text3);margin-top:.12rem}
+.hist-add{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:.38rem .75rem;font-size:.77rem;font-weight:700;cursor:pointer;transition:all var(--tr);font-family:inherit;flex-shrink:0}
+.hist-add:active{transform:scale(.9)}
+
+/* 商品リスト */
+.prod-list{margin-top:.4rem}
+.loc-hdg{font-size:.95rem;font-weight:700;color:var(--accent2);margin:1.1rem 0 .55rem;padding-bottom:.28rem;border-bottom:2px solid rgba(99,102,241,.28)}
+.prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:.65rem;margin-bottom:.4rem}
+.prod-card{background:var(--bg2);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--border);padding:.65rem .45rem .75rem;display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:all var(--tr);position:relative;overflow:hidden}
+.prod-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px}
+.prod-card.daily::before{background:var(--dept-daily)}
+.prod-card.snack::before{background:var(--dept-snack)}
+.prod-card.food::before{background:var(--dept-food)}
+.prod-card.other::before{background:var(--dept-other)}
+.prod-card:active{transform:scale(.95)}
+.prod-card.hl{background:rgba(59,130,246,.14)}
+.prod-card.oos{filter:grayscale(100%);opacity:.48;pointer-events:none}
+.prod-card img{width:80px;height:80px;object-fit:cover;border-radius:var(--rs);background:var(--bg3);margin-bottom:.45rem}
+.prod-name{font-size:.78rem;font-weight:600;color:var(--text);text-align:center;margin-bottom:.28rem;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.prod-box{font-size:.8rem;color:#fff;background:var(--accent);border-radius:18px;padding:.18rem .72rem;font-weight:700;margin-top:auto}
+
+/* タスクリスト */
+.task-list{margin-top:.4rem}
+.cat-hdg{font-size:.92rem;font-weight:700;color:var(--accent);margin:.9rem 0 .45rem}
+.task-item{background:var(--bg2);border-radius:var(--rs);box-shadow:0 2px 8px rgba(0,0,0,.22);border:1px solid var(--border);padding:.65rem .75rem;display:flex;align-items:center;justify-content:space-between;margin-bottom:.55rem;gap:.45rem;transition:all var(--tr)}
+.task-item.carried{opacity:.62;background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.28)}
+.task-item.nc{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.28)}
+.ti-l{display:flex;align-items:center;gap:.65rem;flex:1;min-width:0}
+.task-img{width:52px;height:52px;object-fit:cover;border-radius:var(--rs);background:var(--bg3);flex-shrink:0}
+.task-name{font-size:.86rem;font-weight:600;color:var(--text);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.task-badge{font-size:.7rem;color:var(--accent);font-weight:700;margin-top:.1rem}
+.ti-r{display:flex;gap:.3rem;flex-shrink:0}
+.ti-r button{border:none;border-radius:7px;font-size:.76rem;font-weight:700;padding:.45rem .55rem;cursor:pointer;transition:all var(--tr);min-width:58px;font-family:inherit}
+.ti-r button:active{transform:scale(.9)}
+.btn-ok{background:var(--success);color:#fff}
+.btn-nc{background:var(--warn);color:#fff}
+.btn-del{background:var(--danger);color:#fff}
+
+/* セクションリスト（在庫無・運搬済） */
+.sec-list{background:var(--bg2);border-radius:var(--r);border:1px solid var(--border);padding:.9rem;margin-bottom:.9rem}
+.sec-list-ttl{font-size:.95rem;font-weight:700;color:var(--danger);margin-bottom:.65rem;padding-bottom:.35rem;border-bottom:1px solid rgba(239,68,68,.2)}
+.sec-list-ttl.carried{color:var(--success);border-bottom-color:rgba(34,197,94,.2)}
+.oos-item{display:flex;align-items:center;gap:.75rem;padding:.45rem 0;border-bottom:1px solid var(--border)}
+.oos-item:last-child{border-bottom:none}
+.oos-item.carried{filter:grayscale(60%);opacity:.68}
+.oos-item .task-img{width:46px;height:46px}
+.oos-item .task-name{flex:1;font-size:.82rem}
+.oos-btns{display:flex;gap:.3rem}
+.oos-btns button{border:none;border-radius:7px;padding:.35rem .65rem;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
+.oos-btns button:active{transform:scale(.9)}
+.btn-restore{background:var(--accent);color:#fff}
+.btn-back{background:var(--warn);color:#fff}
+.btn-del2{background:var(--danger);color:#fff}
+
+/* 設定モーダル */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.modal.on{display:flex}
+.modal-body{background:var(--bg2);border-radius:var(--r);padding:1.8rem 1.4rem;width:90%;max-width:370px;box-shadow:0 20px 60px rgba(0,0,0,.5);border:1px solid var(--border)}
+.modal-ttl{font-size:1.2rem;font-weight:700;color:var(--text);margin-bottom:1.3rem}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:.72rem 0;border-bottom:1px solid var(--border)}
+.set-lbl{font-size:.9rem;font-weight:600;color:var(--text)}
+.set-val{font-size:.82rem;color:var(--accent);font-weight:700}
+.tgl{position:relative;display:inline-block;width:42px;height:23px}
+.tgl input{opacity:0;width:0;height:0}
+.tgl-sl{position:absolute;cursor:pointer;inset:0;background:var(--bg3);border-radius:23px;transition:all .2s}
+.tgl-sl::before{content:'';position:absolute;width:17px;height:17px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:all .2s}
+input:checked+.tgl-sl{background:var(--accent)}
+input:checked+.tgl-sl::before{transform:translateX(19px)}
+.set-btns{display:flex;flex-direction:column;gap:.55rem;margin:1.1rem 0}
+.set-btn{width:100%;border:none;border-radius:9px;padding:.72rem;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
+.set-btn:active{transform:scale(.97)}
+.set-btn.blue{background:var(--accent);color:#fff}
+.set-btn.orange{background:#f97316;color:#fff}
+.set-btn.red{background:var(--danger);color:#fff}
+.modal-logo{text-align:center;margin:.9rem 0 .45rem}
+.modal-logo img{max-width:170px;border-radius:7px;opacity:.82}
+.modal-close{width:100%;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:9px;padding:.65rem;font-size:.9rem;font-weight:600;cursor:pointer;font-family:inherit;margin-top:.45rem;transition:all var(--tr)}
+
+/* フラッシュ */
+.flash{position:fixed;top:72px;left:50%;transform:translateX(-50%);z-index:2000;pointer-events:none;display:none}
+.flash.on{display:block}
+.flash-body{color:#fff;border-radius:18px;padding:.65rem 1.4rem;display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.92rem;box-shadow:0 4px 18px rgba(0,0,0,.3);animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:scale(.84)}to{opacity:1;transform:scale(1)}}
+
+/* スクロールトップ */
+.top-btn{position:fixed;right:14px;bottom:18px;z-index:500;background:var(--accent2);color:#fff;border:none;border-radius:50%;font-size:1.2rem;width:44px;height:44px;box-shadow:0 4px 14px rgba(99,102,241,.42);cursor:pointer;display:none;align-items:center;justify-content:center;font-weight:700;transition:all var(--tr)}
+.top-btn.on{display:flex}
+
+/* チャットボット */
+#chatbot-area{position:relative}
+#close-chatbot-btn{position:fixed;top:66px;left:10px;z-index:1500;background:var(--danger);color:#fff;border:none;border-radius:18px;font-size:.86rem;font-weight:700;padding:.55rem 1.1rem;cursor:pointer;box-shadow:0 2px 10px rgba(239,68,68,.32);transition:all var(--tr);font-family:inherit}
+
+/* レスポンシブ */
+@media(max-width:540px){
+  .prod-grid{grid-template-columns:repeat(auto-fill,minmax(102px,1fr));gap:.5rem}
+  .prod-card img{width:72px;height:72px}
+  .res-card{flex-direction:column}
+  #res-img{width:100%;height:160px}
+  .cam-area{height:190px}
+  .ti-r button{min-width:50px;padding:.4rem .42rem;font-size:.72rem}
+}
+
+/* OOSアニメ */
+@keyframes oosPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}50%{box-shadow:0 0 0 6px rgba(239,68,68,.3)}}
+.oos-warn{animation:oosPulse 1s ease 3;border-color:var(--danger)!important}
+</style>
 </head>
 <body>
 
-<!-- ===== ヘッダー ===== -->
-<header class="header" role="banner">
-  <div class="header-inner">
-    <div class="header-title">
-      <span class="header-icon">🛒</span>
-      <span>品出しアシスタント</span>
-    </div>
-    <nav class="tabs" role="navigation" aria-label="カテゴリ切替">
-      <button id="tab-scanner" class="tab" aria-pressed="false">📷 スキャン</button>
-      <button id="tab-drinks" class="tab active" aria-pressed="true">飲料</button>
-      <button id="tab-paper" class="tab" aria-pressed="false">紙類</button>
+<!-- ヘッダー -->
+<header class="hdr">
+  <div class="hdr-in">
+    <div class="hdr-ttl"><span>🛒</span><span>品出しアシスタント</span></div>
+    <nav class="tabs">
+      <button id="tab-scanner" class="tab">📷 スキャン</button>
+      <button id="tab-drinks" class="tab active">飲料</button>
+      <button id="tab-paper" class="tab">紙類</button>
     </nav>
-    <div class="header-actions">
-      <nav class="sub-tabs" role="navigation" aria-label="表示切替">
-        <button id="subtab-products" class="subtab active" aria-pressed="true">商品</button>
-        <button id="subtab-tasks" class="subtab" aria-pressed="false">タスク</button>
-      </nav>
-      <button id="settings-btn" class="settings-btn" title="設定" aria-label="設定">⚙️</button>
+    <div class="hdr-right">
+      <button id="subtab-products" class="subtab active">商品</button>
+      <button id="subtab-tasks" class="subtab">タスク</button>
+      <button id="cfg-btn" class="cfg-btn">⚙️</button>
     </div>
   </div>
 </header>
 
-<!-- ===== メインコンテンツ ===== -->
-<main class="main" role="main">
+<!-- メイン -->
+<main class="main">
 
-  <!-- 検索エリア（商品・飲料/紙タブ用） -->
-  <div class="search-area" id="search-area">
-    <input type="search" id="search-box" placeholder="🔍 商品名で検索" autocomplete="off" aria-label="商品名検索">
-    <div id="paper-cat-buttons" style="display:none;">
-      <button class="paper-cat-btn active" data-cat="all">全て</button>
-      <button class="paper-cat-btn" data-cat="キッチン">キッチン</button>
-      <button class="paper-cat-btn" data-cat="ティッシュ">ティッシュ</button>
-      <button class="paper-cat-btn" data-cat="トイレットペーパー">トイレ</button>
+  <!-- 検索 -->
+  <div class="srch-area" id="srch-area">
+    <input type="search" id="search-box" placeholder="🔍 商品名で検索" autocomplete="off">
+    <div class="pcat-wrap" id="pcat-wrap" style="display:none">
+      <button class="pcat-btn active" data-cat="all">全て</button>
+      <button class="pcat-btn" data-cat="キッチン">キッチン</button>
+      <button class="pcat-btn" data-cat="ティッシュ">ティッシュ</button>
+      <button class="pcat-btn" data-cat="トイレットペーパー">トイレ</button>
     </div>
   </div>
 
-  <!-- ===== スキャナータブ ===== -->
-  <section id="scanner-section" class="section" style="display:none;">
-    <div class="scanner-card">
-      <div class="scanner-header">
-        <h2 class="scanner-title">📷 バーコードスキャン</h2>
-        <p class="scanner-subtitle">JANコード(13桁) / POPコード(7桁)に対応</p>
+  <!-- スキャナー -->
+  <section id="scanner-sec" style="display:none">
+    <div class="scan-card">
+      <div class="scan-hdr">
+        <h2>📷 バーコードスキャン</h2>
+        <p>JANコード（13桁）/ POPコード（7桁）対応</p>
+      </div>
+      <div class="cam-area">
+        <video id="scan-video" playsinline autoplay muted></video>
+        <div class="scan-ov" id="scan-ov">
+          <div class="scan-frame"><div class="scan-line"></div></div>
+          <p class="scan-hint">バーコードをフレームに合わせてください</p>
+        </div>
+        <div class="cam-ph" id="cam-ph">
+          <span class="cam-ph-icon">📷</span>
+          <p>ボタンを押してスキャン開始</p>
+        </div>
+      </div>
+      <div class="scan-ctrls">
+        <button id="btn-start" class="sbtn prim">📷 カメラ起動</button>
+        <button id="btn-stop" class="sbtn stop" style="display:none">⏹ 停止</button>
+        <button id="btn-sw" class="sbtn sw" style="display:none">🔄 切替</button>
+      </div>
+      <div class="manual-area">
+        <p>または手動でコード入力</p>
+        <div class="manual-row">
+          <input type="text" id="manual-in" placeholder="JANコード / POPコード" inputmode="numeric" maxlength="13">
+          <button id="btn-manual" class="sbtn prim sm">検索</button>
+        </div>
       </div>
 
-      <!-- カメラプレビュー -->
-      <div class="camera-area" id="camera-area">
-        <video id="scanner-video" playsinline autoplay muted></video>
-        <div class="scan-overlay">
-          <div class="scan-frame">
-            <div class="scan-line"></div>
+      <!-- 結果エリア -->
+      <div class="res-area" id="res-area">
+        <div class="res-hdr"><span>✅</span><span id="res-code">コード: </span></div>
+        <div class="res-card">
+          <div class="res-img-wrap">
+            <img id="res-img" src="" alt="商品画像" onerror="this.src=''">
+            <label class="photo-lbl" title="写真で登録">📷<input type="file" accept="image/*" capture="environment" id="photo-in" style="display:none"></label>
           </div>
-          <p class="scan-hint">バーコードをフレーム内に合わせてください</p>
-        </div>
-        <div class="camera-placeholder" id="camera-placeholder">
-          <span class="camera-icon">📷</span>
-          <p>カメラを起動してスキャン開始</p>
-        </div>
-      </div>
-
-      <!-- カメラ制御ボタン -->
-      <div class="scanner-controls">
-        <button id="start-scan-btn" class="scan-btn primary">📷 カメラ起動</button>
-        <button id="stop-scan-btn" class="scan-btn danger" style="display:none;">⏹ 停止</button>
-        <button id="switch-camera-btn" class="scan-btn secondary" style="display:none;">🔄 カメラ切替</button>
-      </div>
-
-      <!-- 手動入力 -->
-      <div class="manual-input-area">
-        <p class="manual-label">または手動でコード入力</p>
-        <div class="manual-input-row">
-          <input type="text" id="manual-code-input" placeholder="JANコードまたはPOPコード" inputmode="numeric" maxlength="13">
-          <button id="manual-search-btn" class="scan-btn primary small">検索</button>
-        </div>
-      </div>
-
-      <!-- スキャン結果 -->
-      <div id="scan-result-area" class="scan-result-area" style="display:none;">
-        <div class="result-header">
-          <span class="result-icon">✅</span>
-          <span id="result-code-label">コード: </span>
-        </div>
-        <div class="result-card" id="result-card">
-          <div class="result-img-wrap">
-            <img id="result-img" src="" alt="商品画像" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect fill=\'%23e0e7ff\' width=\'100\' height=\'100\'/><text x=\'50\' y=\'55\' text-anchor=\'middle\' fill=\'%236366f1\' font-size=\'36\'>📦</text></svg>'">
-            <label class="camera-btn-overlay" id="result-camera-btn" title="写真を撮影して商品画像に登録">
-              📷
-              <input type="file" accept="image/*" capture="environment" id="result-photo-input" style="display:none;">
-            </label>
-          </div>
-          <div class="result-info">
-            <div id="result-name" class="result-name">商品名を取得中...</div>
-            <div id="result-dept" class="result-dept"></div>
-            <div class="result-qty-row">
-              <label class="qty-label">数量</label>
-              <button class="qty-btn" id="qty-minus">－</button>
-              <input type="number" id="result-qty" value="1" min="1" max="99" class="qty-input">
-              <button class="qty-btn" id="qty-plus">＋</button>
+          <div class="res-info">
+            <div id="res-name">取得中...</div>
+            <div id="res-dept" class="res-dept other"></div>
+            <div class="qty-row">
+              <span class="qty-lbl">数量</span>
+              <button class="qty-btn" id="qty-m">－</button>
+              <input type="number" id="res-qty" value="1" min="1" max="99" class="qty-input" style="width:46px;text-align:center;background:var(--bg3);color:var(--text);border:1.5px solid var(--border);border-radius:7px;padding:.32rem;font-size:.92rem;font-family:inherit;font-weight:700;outline:none">
+              <button class="qty-btn" id="qty-p">＋</button>
             </div>
-            <div class="result-actions">
-              <button id="add-to-task-btn" class="action-btn success">✅ タスクに追加</button>
-              <button id="mark-outofstock-btn" class="action-btn danger">❌ 在庫無</button>
+            <div class="res-acts">
+              <button id="btn-add" class="act-btn ok">✅ タスク追加</button>
+              <button id="btn-oos" class="act-btn ng">❌ 在庫無</button>
             </div>
           </div>
         </div>
-        <div id="known-badge" class="known-badge" style="display:none;">⚡ キャッシュから即座に表示</div>
-        <div id="loading-indicator" class="loading-indicator" style="display:none;">
-          <div class="spinner"></div>
-          <span>商品情報を取得中...</span>
-        </div>
+        <div class="known-badge" id="known-badge">⚡ キャッシュから即座に表示</div>
+        <div class="ld" id="ld"><div class="spin"></div><span>商品情報を取得中...</span></div>
       </div>
     </div>
 
     <!-- スキャン履歴 -->
-    <div class="scan-history-area" id="scan-history-area">
-      <h3 class="section-title">🕐 最近スキャンした商品</h3>
-      <div id="scan-history-list"></div>
+    <div class="hist-area">
+      <div class="sec-ttl">🕐 最近スキャンした商品</div>
+      <div class="hist-list" id="hist-list"></div>
     </div>
   </section>
 
-  <!-- ===== 商品リスト ===== -->
-  <section id="product-list" class="product-list" aria-label="商品一覧"></section>
+  <!-- 商品リスト -->
+  <section id="prod-list"></section>
 
-  <!-- ===== タスクリスト ===== -->
-  <section id="task-list" class="task-list" style="display:none" aria-label="タスク一覧"></section>
+  <!-- タスクリスト -->
+  <section id="task-list" style="display:none"></section>
 
-  <!-- ===== チャットボットエリア ===== -->
-  <section id="chatbot-area" style="display:none" aria-label="チャットサポート">
-    <button id="close-chatbot-btn" aria-label="商品一覧に戻る">← 商品一覧に戻る</button>
-    <iframe
-      src="https://udify.app/chatbot/pc59V33QbQFkT2nh"
-      style="width: 100%; height: 100%; min-height: 700px"
-      frameborder="0"
-      allow="microphone">
-    </iframe>
+  <!-- チャットボット -->
+  <section id="chatbot-area" style="display:none">
+    <button id="close-chatbot-btn">← 戻る</button>
+    <iframe src="https://udify.app/chatbot/pc59V33QbQFkT2nh" style="width:100%;height:100%;min-height:700px" frameborder="0" allow="microphone"></iframe>
   </section>
 
-  <!-- ===== 設定モーダル ===== -->
-  <div id="settings-modal" class="settings-modal" style="display:none;" role="dialog" aria-modal="true">
-    <div class="settings-modal-content">
-      <h2 class="settings-modal-title">⚙️ 設定</h2>
-      
-      <div class="settings-section">
-        <label class="settings-label">ダークモード</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="theme-toggle">
-          <span class="toggle-slider"></span>
-        </label>
+  <!-- 設定モーダル -->
+  <div class="modal" id="cfg-modal">
+    <div class="modal-body">
+      <div class="modal-ttl">⚙️ 設定</div>
+      <div class="set-row">
+        <span class="set-lbl">ライトモード</span>
+        <label class="tgl"><input type="checkbox" id="theme-tgl"><span class="tgl-sl"></span></label>
       </div>
-
-      <div class="settings-section">
-        <label class="settings-label">スキャン音</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="sound-toggle" checked>
-          <span class="toggle-slider"></span>
-        </label>
+      <div class="set-row">
+        <span class="set-lbl">スキャン音</span>
+        <label class="tgl"><input type="checkbox" id="sound-tgl" checked><span class="tgl-sl"></span></label>
       </div>
-
-      <div class="settings-section">
-        <label class="settings-label">キャッシュ件数</label>
-        <span id="cache-count" class="settings-value">0件</span>
+      <div class="set-row">
+        <span class="set-lbl">キャッシュ件数</span>
+        <span class="set-val" id="cache-cnt">0件</span>
       </div>
-
-      <div class="settings-btns">
-        <button id="chatbot-btn" class="settings-action-btn blue">💬 チャットサポート</button>
-        <button id="clear-cache-btn" class="settings-action-btn orange">🗑 キャッシュ削除</button>
-        <button id="reset-btn" class="settings-action-btn red">🔄 タスクリセット</button>
+      <div class="set-btns">
+        <button class="set-btn blue" id="btn-chat">💬 チャットサポート</button>
+        <button class="set-btn orange" id="btn-clr-cache">🗑 キャッシュ削除</button>
+        <button class="set-btn red" id="btn-reset">🔄 タスクリセット</button>
       </div>
-
-      <div class="settings-modal-logo">
-        <img src="KUTSUZAWA_rogo.jpg" alt="KUTSUZAWAロゴ" loading="lazy">
-      </div>
-      <button id="close-settings" class="close-settings">閉じる</button>
+      <div class="modal-logo"><img src="KUTSUZAWA_rogo.jpg" alt="KUTSUZAWA" loading="lazy"></div>
+      <button class="modal-close" id="cfg-close">閉じる</button>
     </div>
   </div>
-
 </main>
 
-<!-- ページトップボタン -->
-<button id="scrollTopBtn" class="scroll-top-btn" title="ページトップへ" aria-label="ページトップへ">↑</button>
+<button class="top-btn" id="top-btn">↑</button>
 
-<!-- スキャン成功モーダル（一瞬表示） -->
-<div id="scan-flash" class="scan-flash" style="display:none;">
-  <div class="scan-flash-content">
-    <span class="scan-flash-icon">✅</span>
-    <span id="scan-flash-text">スキャン成功</span>
-  </div>
+<!-- フラッシュ通知 -->
+<div class="flash" id="flash">
+  <div class="flash-body" id="flash-body">✅ スキャン成功</div>
 </div>
 
-<script src="script.js"></script>
+<script>
+// ================================================================
+// 品出しアシスタント Pro — script（完全内蔵版）
+// ================================================================
+'use strict';
+
+// --- 定数 ---
+const TAB_CSV = { drinks:'drinks.csv', paper:'paper.csv' };
+const DRINK_ORDER = ['水','お茶','ジュース','炭酸','大型飲料','コーヒー','その他'];
+const PAPER_ORDER = ['キッチン','ティッシュ','トイレットペーパー'];
+const DAILY_KW = ['牛乳','乳','ヨーグルト','チーズ','豆腐','納豆','卵','たまご','惣菜','おにぎり','パン','弁当','刺身','寿司','サラダ','漬物','日配'];
+const SNACK_KW = ['チョコ','ポテト','せんべい','クッキー','スナック','ガム','キャンディ','飴','グミ','アイス','菓子','ビスケット','おかし','プリン','ゼリー'];
+
+// --- 状態 ---
+let currentTab = 'drinks';
+let products = [];
+let tasks = [];
+let oos     = JSON.parse(localStorage.getItem('oos') || '[]');
+let oosCnt  = JSON.parse(localStorage.getItem('oosCnt') || '{}');
+let oosRst  = JSON.parse(localStorage.getItem('oosRst') || '{}');
+let taskCnt = {};
+let scanActive = false;
+let codeReader = null;
+let cameras = [];
+let camIdx = 0;
+let curProd = { code:'', name:'', imageUrl:'', dept:'' };
+let lastCode = ''; let lastTime = 0;
+window.searchKw = ''; window.paperCat = null;
+
+// --- キャッシュ ---
+const getCache  = () => JSON.parse(localStorage.getItem('pCache') || '{}');
+const saveCache = c => localStorage.setItem('pCache', JSON.stringify(c));
+const getHist   = () => JSON.parse(localStorage.getItem('scanHist') || '[]');
+const saveHist  = h => localStorage.setItem('scanHist', JSON.stringify(h));
+const setCached = (code, d) => { const c = getCache(); c[code] = {...d, ts:Date.now()}; saveCache(c); };
+const getCached = code => getCache()[code] || null;
+
+function addHist(code, d) {
+  let h = getHist().filter(x => x.code !== code);
+  h.unshift({ code, ...d, ts:Date.now() });
+  if(h.length > 20) h = h.slice(0,20);
+  saveHist(h);
+}
+
+// --- 部門判定 ---
+function dept(name) {
+  if(!name) return 'other';
+  if(DAILY_KW.some(k => name.includes(k))) return 'daily';
+  if(SNACK_KW.some(k => name.includes(k))) return 'snack';
+  return 'food';
+}
+const deptLbl = d => ({daily:'日配',snack:'菓子',food:'食品',other:'その他'})[d]||'その他';
+
+// --- CSV ---
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const pl = line => {
+    const cols=[]; let cur=''; let q=false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else{q=!q;}}
+      else if(c===','&&!q){cols.push(cur);cur='';}
+      else{cur+=c;}
+    }
+    cols.push(cur); return cols;
+  };
+  const hdrs = pl(lines[0]).map((h,i)=>i===0?h.replace(/^\uFEFF/,''):h);
+  return lines.slice(1).map(l=>{
+    if(!l.trim()) return null;
+    const cols=pl(l); const o={};
+    hdrs.forEach((h,i)=>{ let v=cols[i]||'';
+      if(v.length>=2&&v[0]==='"'&&v[v.length-1]==='"') v=v.slice(1,-1).replace(/""/g,'"');
+      o[h]=v;
+    });
+    o.order=Number(o.order)||0;
+    try{o.tasks=o.tasks?JSON.parse(o.tasks):[];}catch{o.tasks=[];}
+    return o;
+  }).filter(Boolean);
+}
+
+async function loadProducts(tab) {
+  try {
+    const r = await fetch(TAB_CSV[tab]);
+    const t = await r.text();
+    products = parseCSV(t).sort((a,b)=>a.order-b.order);
+    renderProds(); renderTasks();
+  } catch(e){ console.error('CSV読込失敗:',e); }
+}
+
+// --- 商品情報取得 ---
+function fetchTimed(url, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms);
+  return fetch(url, {signal:ctrl.signal}).finally(()=>clearTimeout(timer));
+}
+
+// 名前クリーニング
+function cleanName(raw, code) {
+  if(!raw) return '';
+  let n = raw.trim();
+  const noise = [
+    /Yahoo!ショッピング.*/gi, /楽天市場.*/gi, /Amazon.*/gi,
+    /の商品をすべて見る.*/gi, /ショッピング検索.*/gi,
+    /\| .*/g, /- .*(?:円|株式会社|通販).*/g,
+    /\d+件/g, /検索結果.*/gi, /カテゴリ.*/gi,
+    /ランキング.*/gi, /通販.*/gi,
+    /【.*?】/g, /\[.*?\]/g,
+  ];
+  noise.forEach(p=>{ n=n.replace(p,'').trim(); });
+  if(code) n=n.replace(new RegExp(code,'g'),'').trim();
+  n = n.replace(/\s+/g,' ').trim();
+  if(n.length<2||n.length>80) return '';
+  return n;
+}
+
+// Open Food Facts（日本向け最も信頼性高）
+async function fetchOFF(code) {
+  try {
+    const r = await fetchTimed(`https://world.openfoodfacts.org/api/v0/product/${code}.json`, 7000);
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(d.status!==1||!d.product) return null;
+    const p = d.product;
+    const name = p.product_name_ja||p.product_name||'';
+    if(!name) return null;
+    const imageUrl = p.image_front_url||p.image_url||'';
+    return { name: cleanName(name,code)||name, imageUrl };
+  } catch{ return null; }
+}
+
+// Yahoo!ショッピング（複数プロキシ試行）
+async function fetchYahoo(code) {
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(`https://shopping.yahoo.co.jp/search?p=${code}&n=1`)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(`https://shopping.yahoo.co.jp/search?p=${code}&n=1`)}`,
+  ];
+  for(const url of proxies) {
+    try {
+      const r = await fetchTimed(url, 7000);
+      if(!r.ok) continue;
+      const html = await r.text();
+      const name = extractYahooName(html, code);
+      if(!name) continue;
+      const imageUrl = extractYahooImg(html);
+      return { name, imageUrl };
+    } catch{ continue; }
+  }
+  return null;
+}
+
+function extractYahooName(html, code) {
+  if(!html) return null;
+  const dp = new DOMParser();
+  const doc = dp.parseFromString(html,'text/html');
+  const sels = ['[class*="ProductTitle"]','[class*="product-name"]','[class*="itemName"]'];
+  for(const s of sels){
+    const el=doc.querySelector(s);
+    if(el){ const n=cleanName(el.textContent,code); if(n&&n.length>3) return n; }
+  }
+  const og=doc.querySelector('meta[property="og:title"]');
+  if(og){ const n=cleanName(og.getAttribute('content'),code); if(n&&n.length>3) return n; }
+  return null;
+}
+function extractYahooImg(html) {
+  if(!html) return '';
+  const dp = new DOMParser();
+  const doc = dp.parseFromString(html,'text/html');
+  const og=doc.querySelector('meta[property="og:image"]');
+  if(og) return og.getAttribute('content')||'';
+  return '';
+}
+
+async function fetchProduct(code) {
+  const cached = getCached(code);
+  if(cached) return {...cached, fromCache:true};
+  // 1. Open Food Facts
+  const off = await fetchOFF(code);
+  if(off&&off.name) {
+    const d = dept(off.name);
+    return {name:off.name, imageUrl:off.imageUrl, dept:d, fromCache:false};
+  }
+  // 2. Yahoo (複数プロキシ)
+  const y = await fetchYahoo(code);
+  if(y&&y.name) {
+    const d = dept(y.name);
+    return {name:y.name, imageUrl:y.imageUrl||'', dept:d, fromCache:false};
+  }
+  return {name:`コード: ${code}`, imageUrl:'', dept:'other', fromCache:false};
+}
+
+// --- バーコードスキャナー ---
+// ZXing完全排除。BarcodeDetector API（標準）+ canvasポーリングのみ使用
+
+let barcodeDetector = null;
+let scanCanvas = null; let scanCtx = null;
+let scanRaf = null;
+
+async function initScanner() {
+  // BarcodeDetector API チェック
+  if(!('BarcodeDetector' in window)) {
+    // 非対応ブラウザ向けメッセージ（手動入力を案内）
+    showAlert('このブラウザはバーコードスキャンに対応していません。\n\n【対応ブラウザ】\nAndroid: Chrome最新版\niPhone: Safari 17以降\n\n手動入力欄からコードを入力してください。');
+    return;
+  }
+
+  try {
+    barcodeDetector = new BarcodeDetector({
+      formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code']
+    });
+  } catch(e) {
+    showAlert('バーコード検出器の初期化に失敗しました: ' + e.message);
+    return;
+  }
+
+  // カメラ起動（デバイス一覧取得不要 - 直接getUserMedia）
+  await startCam();
+}
+
+async function startCam() {
+  const video = document.getElementById('scan-video');
+
+  // まず背面カメラで試みる
+  const constraints = {
+    video: { facingMode: { ideal: 'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } }
+  };
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    await video.play();
+
+    // カメラ一覧はstream取得後に取得（権限許可後でないとlabelが空）
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      cameras = devices.filter(d=>d.kind==='videoinput');
+    } catch(e) { cameras = []; }
+
+    video.classList.add('on');
+    document.getElementById('cam-ph').style.display='none';
+    document.getElementById('scan-ov').classList.add('on');
+    document.getElementById('btn-start').style.display='none';
+    document.getElementById('btn-stop').style.display='';
+    if(cameras.length>1) document.getElementById('btn-sw').style.display='';
+    scanActive = true;
+
+    scanCanvas = document.createElement('canvas');
+    scanCtx = scanCanvas.getContext('2d');
+    scanLoop();
+
+  } catch(e) {
+    console.error('カメラ起動失敗:',e);
+    let msg = 'カメラへのアクセスが拒否されました。\n\n';
+    if(e.name==='NotAllowedError') {
+      msg += '【解決手順】\n1. このページを閉じる\n2. ブラウザのアドレスバー横の🔒をタップ\n3. カメラ→「許可」に変更\n4. ページを再読み込み';
+    } else if(e.name==='NotFoundError') {
+      msg += 'カメラが見つかりません。';
+    } else {
+      msg += e.message;
+    }
+    showAlert(msg);
+  }
+}
+
+// BarcodeDetector APIでスキャンループ
+function scanLoop() {
+  if(!scanActive || !barcodeDetector) return;
+  const video = document.getElementById('scan-video');
+  if(video.readyState >= 2 && video.videoWidth > 0) {
+    scanCanvas.width = video.videoWidth;
+    scanCanvas.height = video.videoHeight;
+    scanCtx.drawImage(video, 0, 0);
+    barcodeDetector.detect(scanCanvas)
+      .then(codes => { if(codes.length>0) handleCode(codes[0].rawValue); })
+      .catch(()=>{});
+  }
+  scanRaf = setTimeout(scanLoop, 250);
+}
+
+function stopScanner() {
+  scanActive = false;
+  if(scanRaf) { clearTimeout(scanRaf); scanRaf=null; }
+  const video = document.getElementById('scan-video');
+  if(video.srcObject) { video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; }
+  video.classList.remove('on');
+  document.getElementById('cam-ph').style.display='';
+  document.getElementById('scan-ov').classList.remove('on');
+  document.getElementById('btn-start').style.display='';
+  document.getElementById('btn-stop').style.display='none';
+  document.getElementById('btn-sw').style.display='none';
+}
+
+async function switchCam() {
+  // 現在のストリームを止めて、前面/背面を切り替え
+  const video = document.getElementById('scan-video');
+  if(video.srcObject) { video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; }
+  if(scanRaf) { clearTimeout(scanRaf); scanRaf=null; }
+  scanActive = false;
+
+  camIdx = (camIdx+1) % Math.max(cameras.length,2);
+  const useFront = camIdx===0;
+  const constraints = {
+    video: { facingMode: useFront ? 'user' : { ideal:'environment' }, width:{ideal:1280}, height:{ideal:720} }
+  };
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    await video.play();
+    scanActive = true;
+    scanLoop();
+  } catch(e) { showAlert('カメラ切替失敗: '+e.message); }
+}
+
+// コードを受け取って処理
+async function handleCode(code) {
+  const now = Date.now();
+  if(code===lastCode && now-lastTime<2000) return;
+  lastCode=code; lastTime=now;
+  if(!/^\d{7}$|^\d{13}$/.test(code)) return;
+
+  // 在庫無チェック
+  if(oos.includes(code)) {
+    const c=getCached(code);
+    flash(`⚠️ 在庫無登録済: ${c?.name||code}`, '#f59e0b');
+    beep('warn'); return;
+  }
+  beep('ok');
+  flash(`📷 スキャン: ${code}`);
+  showResArea(code);
+  await lookup(code);
+}
+
+async function lookup(code) {
+  const ra=document.getElementById('res-area');
+  ra.classList.add('on');
+  document.getElementById('res-code').textContent='コード: '+code;
+  document.getElementById('res-name').textContent='取得中...';
+  document.getElementById('res-img').src='';
+  document.getElementById('res-dept').textContent='';
+  document.getElementById('known-badge').classList.remove('on');
+
+  const cached=getCached(code);
+  if(cached){
+    showResult(cached,code);
+    document.getElementById('known-badge').classList.add('on');
+    document.getElementById('ld').classList.remove('on');
+    return;
+  }
+  document.getElementById('ld').classList.add('on');
+  const info = await fetchProduct(code);
+  document.getElementById('ld').classList.remove('on');
+  showResult(info,code);
+  if(info.name&&!info.name.startsWith('コード:')){
+    setCached(code,{name:info.name,imageUrl:info.imageUrl,dept:info.dept});
+    addHist(code,{name:info.name,imageUrl:info.imageUrl,dept:info.dept});
+  }
+  updCacheCnt();
+}
+
+function showResult(info,code){
+  document.getElementById('res-name').textContent=info.name||`コード:${code}`;
+  document.getElementById('res-img').src=info.imageUrl||'';
+  const dd=document.getElementById('res-dept');
+  dd.textContent=deptLbl(info.dept||'other');
+  dd.className=`res-dept ${info.dept||'other'}`;
+  curProd={code,name:info.name,imageUrl:info.imageUrl,dept:info.dept};
+  document.getElementById('res-qty').value=1;
+}
+
+function showResArea(code){
+  const ra=document.getElementById('res-area'); ra.classList.add('on');
+  document.getElementById('res-code').textContent='コード: '+code;
+  document.getElementById('res-name').textContent='取得中...';
+  document.getElementById('res-img').src='';
+}
+
+// タスク追加（スキャン）
+function addScanned(){
+  const qty=parseInt(document.getElementById('res-qty').value)||1;
+  const {code,name,imageUrl,dept:d}=curProd;
+  if(!name||name.startsWith('コード:')){ showAlert('商品名を取得できていません'); return; }
+  for(let i=0;i<qty;i++){
+    tasks.push({id:code,name,imageUrl,category:d==='daily'?'日配':d==='snack'?'菓子':'その他',location:'スキャン',status:'new',taskUid:Date.now()+Math.random(),isScanned:true});
+  }
+  if(!taskCnt[code]) taskCnt[code]=0;
+  taskCnt[code]+=qty;
+  saveTasks(); renderTasks();
+  flash(`✅ タスクに追加 ×${qty}`);
+}
+
+// 在庫無登録（スキャン）
+function markOOS(){
+  const {code,name}=curProd; if(!code) return;
+  if(!oos.includes(code)){ oos.push(code); localStorage.setItem('oos',JSON.stringify(oos)); }
+  tasks=tasks.filter(t=>t.id!==code);
+  saveTasks(); renderTasks(); renderProds();
+  flash(`❌ 在庫無: ${name||code}`,'#ef4444');
+}
+
+// --- 商品リスト描画 ---
+function updTaskCnt(){ taskCnt={}; tasks.forEach(t=>{ if(!taskCnt[t.id]) taskCnt[t.id]=0; taskCnt[t.id]++; }); }
+
+function renderProds(){
+  updTaskCnt();
+  const list=document.getElementById('prod-list'); list.innerHTML='';
+  const kw=(window.searchKw||'').toLowerCase();
+  const isPaper=currentTab==='paper';
+  const grp={}, locOrder=[];
+  const paperOrd=['キッチン用品','レジ前','トイレ用品'];
+  products.forEach(p=>{ if(!grp[p.location]){grp[p.location]=[];locOrder.push(p.location);} grp[p.location].push(p); });
+  let order=isPaper ? [...paperOrd.filter(l=>locOrder.includes(l)),...locOrder.filter(l=>!paperOrd.includes(l))] : locOrder;
+  order.forEach(loc=>{
+    const items=(grp[loc]||[]).filter(p=>!kw||p.name.toLowerCase().includes(kw));
+    if(!items.length) return;
+    const h=document.createElement('h2'); h.className='loc-hdg'; h.textContent=loc; list.appendChild(h);
+    const g=document.createElement('div'); g.className='prod-grid';
+    items.forEach(p=>{
+      const d=dept(p.name);
+      const card=document.createElement('div'); card.className=`prod-card ${d}`;
+      if(oos.includes(p.id)) card.classList.add('oos');
+      const cnt=taskCnt[p.id]||0;
+      const box=isPaper?`${cnt}/${Number(p.Count)||0}`:`追加数: ${cnt}`;
+      // フォールバック画像
+      const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><rect fill='%23374151' width='80' height='80' rx='8'/><text x='40' y='48' text-anchor='middle' fill='%236B7280' font-size='26'>📦</text></svg>`;
+      card.innerHTML=`<img src="${p.imageUrl}" alt="${p.name}" onerror="this.onerror=null;this.src='${fallback}'"><div class="prod-name">${p.name}</div><div class="prod-box">${box}</div>`;
+      let lpt=null,isLp=false;
+      const img=card.querySelector('img');
+      const slp=()=>{if(oos.includes(p.id))return;isLp=false;lpt=setTimeout(()=>{isLp=true;window.open('https://www.google.com/search?q='+encodeURIComponent(p.name),'_blank');},2000);};
+      const clp=()=>clearTimeout(lpt);
+      img.addEventListener('mousedown',slp); img.addEventListener('mouseup',clp); img.addEventListener('mouseleave',clp);
+      img.addEventListener('touchstart',slp,{passive:true}); img.addEventListener('touchend',clp);
+      card.onclick=()=>{
+        if(oos.includes(p.id)){card.classList.add('oos-warn');setTimeout(()=>card.classList.remove('oos-warn'),3000);return;}
+        if(isLp){isLp=false;return;}
+        addTask(p); card.classList.add('hl'); setTimeout(()=>card.classList.remove('hl'),300);
+      };
+      g.appendChild(card);
+    });
+    list.appendChild(g);
+  });
+}
+
+// --- タスク操作 ---
+function addTask(p){
+  tasks.push({...p,status:'new',taskUid:Date.now()+Math.random()});
+  if(!taskCnt[p.id]) taskCnt[p.id]=0; taskCnt[p.id]++;
+  saveTasks(); renderTasks(); renderProds();
+}
+function delTask(uid){
+  const i=tasks.findIndex(t=>t.taskUid===uid);
+  if(i!==-1){ const id=tasks[i].id; tasks.splice(i,1); if(taskCnt[id]){taskCnt[id]--;if(!taskCnt[id])delete taskCnt[id];} saveTasks(); renderTasks(); renderProds(); }
+}
+function saveTasks(){ localStorage.setItem('tasks',JSON.stringify(tasks)); }
+function loadTasks(){ const t=localStorage.getItem('tasks'); tasks=t?JSON.parse(t):[]; }
+
+// --- タスクリスト描画 ---
+function renderTasks(){
+  const area=document.getElementById('task-list'); area.innerHTML='';
+  const normal=[],nc=[],carried=[];
+  tasks.forEach(t=>{
+    if(currentTab!=='paper'&&window.searchKw&&!t.name.toLowerCase().includes(window.searchKw)) return;
+    if(currentTab==='paper'&&window.paperCat&&t.category!==window.paperCat) return;
+    if(t.status==='carried') carried.push(t);
+    else if(t.status==='not-carried') nc.push(t);
+    else normal.push(t);
+  });
+
+  // スキャン商品（飲料タブ）
+  if(currentTab==='drinks'){
+    const scanned=normal.filter(t=>t.isScanned);
+    if(scanned.length){
+      const h=document.createElement('div'); h.className='cat-hdg'; h.textContent='📷 スキャン商品'; area.appendChild(h);
+      scanned.forEach(t=>area.appendChild(mkTaskItem(t)));
+    }
+    DRINK_ORDER.forEach(cat=>{
+      const its=normal.filter(t=>t.category===cat&&!t.isScanned);
+      if(!its.length) return;
+      const h=document.createElement('div'); h.className='cat-hdg'; h.textContent=cat; area.appendChild(h);
+      its.forEach(t=>area.appendChild(mkTaskItem(t)));
+    });
+  }
+  // 紙タブ（集約）
+  if(currentTab==='paper'){
+    const ids=[...new Set(tasks.map(t=>t.id))].filter(id=>{
+      const p=products.find(x=>x.id===id); if(!p) return false;
+      if(window.paperCat&&p.category!==window.paperCat) return false; return true;
+    });
+    ids.forEach(id=>{
+      const p=products.find(x=>x.id===id); if(!p) return;
+      const tot=tasks.filter(t=>t.id===id).length;
+      const crd=tasks.filter(t=>t.id===id&&t.status==='carried').length;
+      if(crd>=tot&&tot>0) return;
+      area.appendChild(mkPaperItem(id,p,tot,crd));
+    });
+  }
+  // 未運搬
+  if(nc.length){
+    const box=mkSecList('未運搬商品','');
+    const ord=currentTab==='drinks'?DRINK_ORDER:PAPER_ORDER;
+    [...ord,...nc.map(t=>t.category).filter(c=>!ord.includes(c))].forEach(cat=>{
+      nc.filter(t=>t.category===cat).forEach(t=>box.appendChild(mkNCItem(t)));
+    });
+    area.appendChild(box);
+  }
+  // 在庫無（飲料のみ）
+  if(currentTab==='drinks'&&oos.length){
+    const box=mkSecList('在庫無商品','');
+    [...new Set(oos)].forEach(id=>{
+      const p=products.find(x=>x.id===id);
+      const c=getCached(id);
+      const name=p?.name||c?.name||`コード:${id}`;
+      const img=p?.imageUrl||c?.imageUrl||'';
+      const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='46' height='46'><rect fill='%23374151' width='46' height='46'/></svg>`;
+      const row=document.createElement('div'); row.className='oos-item';
+      row.innerHTML=`<img class="task-img" src="${img}" alt="" onerror="this.onerror=null;this.src='${fallback}'" style="width:46px;height:46px"><span class="task-name">${name}</span>`;
+      const btns=document.createElement('div'); btns.className='oos-btns';
+      const rb=btn('戻す','btn-restore'); rb.onclick=()=>{
+        oos=oos.filter(x=>x!==id); localStorage.setItem('oos',JSON.stringify(oos));
+        const rc=oosCnt[id]||1; const rs=oosRst[id]||[];
+        delete oosCnt[id]; delete oosRst[id];
+        localStorage.setItem('oosCnt',JSON.stringify(oosCnt));
+        localStorage.setItem('oosRst',JSON.stringify(oosRst));
+        if(p){ for(let i=0;i<rc;i++) tasks.push({...p,status:rs[i]||'new',taskUid:Date.now()+Math.random()}); }
+        saveTasks(); renderTasks(); renderProds();
+      };
+      btns.appendChild(rb); row.appendChild(btns); box.appendChild(row);
+    });
+    area.appendChild(box);
+  }
+  // 運搬済
+  if(carried.length){
+    const box=mkSecList('✅ 運搬済商品','carried');
+    const grp={}; carried.forEach(t=>{ if(!grp[t.category]) grp[t.category]=[]; grp[t.category].push(t); });
+    const ord=currentTab==='drinks'?DRINK_ORDER:PAPER_ORDER;
+    [...ord,...Object.keys(grp).filter(c=>!ord.includes(c))].forEach(cat=>{
+      (grp[cat]||[]).forEach(t=>{
+        const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='46' height='46'><rect fill='%23374151' width='46' height='46'/></svg>`;
+        const row=document.createElement('div'); row.className='oos-item carried';
+        row.innerHTML=`<img class="task-img" src="${t.imageUrl}" alt="" onerror="this.onerror=null;this.src='${fallback}'" style="width:46px;height:46px"><span class="task-name">${t.name}</span>`;
+        const btns=document.createElement('div'); btns.className='oos-btns';
+        const db=btn('削除','btn-del2'); db.onclick=()=>{ tasks=tasks.filter(x=>x.taskUid!==t.taskUid); saveTasks(); renderTasks(); };
+        const bb=btn('戻す','btn-back'); bb.onclick=()=>{ t.status='new'; saveTasks(); renderTasks(); };
+        btns.appendChild(db); btns.appendChild(bb); row.appendChild(btns); box.appendChild(row);
+      });
+    });
+    area.appendChild(box);
+  }
+}
+
+// タスクアイテム生成
+function mkTaskItem(t){
+  const el=document.createElement('div'); el.className='task-item';
+  const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='52' height='52'><rect fill='%23374151' width='52' height='52'/></svg>`;
+  el.innerHTML=`<div class="ti-l"><img class="task-img" src="${t.imageUrl}" alt="" onerror="this.onerror=null;this.src='${fallback}'"><div><div class="task-name">${t.name}</div>${t.isScanned?'<div class="task-badge">📷 スキャン</div>':''}</div></div><div class="ti-r"><button class="btn-ok">運搬済</button><button class="btn-nc">未運搬</button><button class="btn-del">削除</button></div>`;
+  el.querySelector('.btn-ok').onclick=()=>{ t.status='carried'; saveTasks(); renderTasks(); };
+  el.querySelector('.btn-nc').onclick=()=>{ t.status='not-carried'; saveTasks(); renderTasks(); };
+  el.querySelector('.btn-del').onclick=()=>delTask(t.taskUid);
+  return el;
+}
+function mkPaperItem(id,p,tot,crd){
+  const el=document.createElement('div'); el.className='task-item';
+  const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='52' height='52'><rect fill='%23374151' width='52' height='52'/></svg>`;
+  el.innerHTML=`<div class="ti-l"><img class="task-img" src="${p.imageUrl}" alt="" onerror="this.onerror=null;this.src='${fallback}'"><div><div class="task-name">${p.name}</div><div class="task-badge">${crd}/${tot} 運搬済</div></div></div>`;
+  const r=document.createElement('div'); r.className='ti-r';
+  const co=btn('運搬済','btn-ok'); co.onclick=()=>{ const ta=tasks.find(t=>t.id===id&&t.status!=='carried'); if(ta){ta.status='carried';saveTasks();renderTasks();} };
+  const dd=btn('削除','btn-del'); dd.onclick=()=>{ tasks=tasks.filter(t=>t.id!==id); taskCnt[id]=0; saveTasks(); renderTasks(); renderProds(); };
+  r.appendChild(co); r.appendChild(dd); el.appendChild(r); return el;
+}
+function mkNCItem(t){
+  const el=document.createElement('div'); el.className='task-item nc';
+  const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='52' height='52'><rect fill='%23374151' width='52' height='52'/></svg>`;
+  el.innerHTML=`<div class="ti-l"><img class="task-img" src="${t.imageUrl}" alt="" onerror="this.onerror=null;this.src='${fallback}'"><div class="task-name">${t.name}</div></div><div class="ti-r"><button class="btn-ok">運搬済</button><button class="btn-nc">在庫無</button><button class="btn-del">削除</button></div>`;
+  el.querySelector('.btn-ok').onclick=()=>{ t.status='carried'; saveTasks(); renderTasks(); };
+  el.querySelector('.btn-nc').onclick=()=>{
+    if(!oos.includes(t.id)){ oos.push(t.id); const st=tasks.filter(x=>x.id===t.id); oosCnt[t.id]=st.length; oosRst[t.id]=st.map(x=>x.status); localStorage.setItem('oos',JSON.stringify(oos)); localStorage.setItem('oosCnt',JSON.stringify(oosCnt)); localStorage.setItem('oosRst',JSON.stringify(oosRst)); }
+    tasks=tasks.filter(x=>x.id!==t.id); saveTasks(); renderProds(); renderTasks();
+  };
+  el.querySelector('.btn-del').onclick=()=>delTask(t.taskUid);
+  return el;
+}
+function mkSecList(title, extraClass){
+  const box=document.createElement('div'); box.className='sec-list';
+  const h=document.createElement('div'); h.className='sec-list-ttl '+(extraClass||''); h.textContent=title;
+  box.appendChild(h); return box;
+}
+function btn(text,cls){ const b=document.createElement('button'); b.className=cls; b.textContent=text; return b; }
+
+// --- スキャン履歴描画 ---
+function renderHist(){
+  const list=document.getElementById('hist-list');
+  const hist=getHist(); list.innerHTML='';
+  if(!hist.length){ list.innerHTML='<p style="color:var(--text3);font-size:.86rem;text-align:center;padding:1rem">まだスキャン履歴がありません</p>'; return; }
+  const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48'><rect fill='%23374151' width='48' height='48'/></svg>`;
+  hist.slice(0,10).forEach(item=>{
+    const el=document.createElement('div'); el.className='hist-item';
+    el.innerHTML=`<img class="hist-img" src="${item.imageUrl||''}" alt="" onerror="this.onerror=null;this.src='${fallback}'"><div class="hist-info"><div class="hist-name">${item.name}</div><div class="hist-code">${item.code}</div></div><button class="hist-add">追加</button>`;
+    el.querySelector('.hist-add').onclick=e=>{
+      e.stopPropagation();
+      tasks.push({id:item.code,name:item.name,imageUrl:item.imageUrl,category:item.dept==='daily'?'日配':item.dept==='snack'?'菓子':'その他',location:'スキャン',status:'new',taskUid:Date.now()+Math.random(),isScanned:true});
+      if(!taskCnt[item.code]) taskCnt[item.code]=0; taskCnt[item.code]++;
+      saveTasks(); renderTasks(); flash(`✅ ${item.name}`);
+    };
+    el.onclick=()=>{ curProd={code:item.code,name:item.name,imageUrl:item.imageUrl,dept:item.dept}; showResArea(item.code); showResult(item,item.code); document.getElementById('known-badge').classList.add('on'); };
+    list.appendChild(el);
+  });
+}
+
+// --- UI ユーティリティ ---
+function flash(msg, bg='#22c55e'){
+  const f=document.getElementById('flash'); const fb=document.getElementById('flash-body');
+  fb.textContent=msg; fb.style.background=bg; f.classList.add('on');
+  setTimeout(()=>f.classList.remove('on'),2200);
+}
+function beep(type='ok'){
+  if(!document.getElementById('sound-tgl')?.checked) return;
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(); const g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    if(type==='warn'){ o.frequency.setValueAtTime(440,ctx.currentTime); o.frequency.setValueAtTime(330,ctx.currentTime+.1); }
+    else{ o.frequency.setValueAtTime(880,ctx.currentTime); o.frequency.setValueAtTime(1100,ctx.currentTime+.05); }
+    g.gain.setValueAtTime(.28,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.01,ctx.currentTime+.22);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime+.22);
+  }catch{}
+}
+function showAlert(m){ alert(m); }
+function updCacheCnt(){ const n=Object.keys(getCache()).length; const el=document.getElementById('cache-cnt'); if(el) el.textContent=n+'件'; }
+
+// --- タブ切り替え ---
+function setTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  const ss=document.getElementById('scanner-sec');
+  const pl=document.getElementById('prod-list');
+  const sa=document.getElementById('srch-area');
+  const pb=document.getElementById('pcat-wrap');
+  const sb=document.getElementById('search-box');
+  if(tab==='scanner'){
+    ss.style.display=''; pl.style.display='none'; document.getElementById('task-list').style.display='none';
+    sa.style.display='none';
+    document.getElementById('subtab-products').classList.add('active');
+    document.getElementById('subtab-tasks').classList.remove('active');
+    renderHist(); updCacheCnt();
+  } else {
+    ss.style.display='none'; sa.style.display='';
+    pb.style.display=tab==='paper'?'':'none';
+    sb.style.display=tab==='paper'?'none':'';
+    const taskActive=document.getElementById('subtab-tasks').classList.contains('active');
+    pl.style.display=taskActive?'none':''; document.getElementById('task-list').style.display=taskActive?'':'none';
+    loadProducts(tab);
+  }
+}
+
+// --- DOMContentLoaded ---
+document.addEventListener('DOMContentLoaded',()=>{
+
+  // テーマ
+  const tgl=document.getElementById('theme-tgl');
+  if(localStorage.getItem('theme')==='light'){ document.body.classList.add('light'); tgl.checked=true; }
+  tgl.addEventListener('change',()=>{ document.body.classList.toggle('light',tgl.checked); localStorage.setItem('theme',tgl.checked?'light':'dark'); });
+
+  // 音
+  const stgl=document.getElementById('sound-tgl');
+  stgl.checked=localStorage.getItem('sound')!=='false';
+  stgl.addEventListener('change',()=>localStorage.setItem('sound',stgl.checked));
+
+  // タブ
+  document.getElementById('tab-scanner').onclick=()=>setTab('scanner');
+  document.getElementById('tab-drinks').onclick=()=>setTab('drinks');
+  document.getElementById('tab-paper').onclick=()=>setTab('paper');
+
+  // サブタブ
+  document.getElementById('subtab-products').onclick=()=>{
+    document.getElementById('prod-list').style.display='';
+    document.getElementById('task-list').style.display='none';
+    document.getElementById('subtab-products').classList.add('active');
+    document.getElementById('subtab-tasks').classList.remove('active');
+    if(currentTab==='paper'){ document.getElementById('pcat-wrap').style.display=''; document.getElementById('search-box').style.display='none'; }
+  };
+  document.getElementById('subtab-tasks').onclick=()=>{
+    document.getElementById('prod-list').style.display='none';
+    document.getElementById('task-list').style.display='';
+    document.getElementById('subtab-products').classList.remove('active');
+    document.getElementById('subtab-tasks').classList.add('active');
+    if(currentTab==='paper'){ document.getElementById('pcat-wrap').style.display=''; document.getElementById('search-box').style.display='none'; }
+    renderTasks();
+  };
+
+  // 紙カテゴリ
+  document.querySelectorAll('.pcat-btn').forEach(b=>{
+    b.addEventListener('click',e=>{
+      const cat=e.currentTarget.dataset.cat;
+      window.paperCat=cat==='all'?null:cat;
+      document.querySelectorAll('.pcat-btn').forEach(x=>x.classList.remove('active'));
+      e.currentTarget.classList.add('active');
+      renderTasks();
+    });
+  });
+
+  // 検索
+  document.getElementById('search-box').addEventListener('input',e=>{ window.searchKw=e.target.value.trim().toLowerCase(); renderProds(); renderTasks(); });
+
+  // 設定
+  document.getElementById('cfg-btn').onclick=()=>{ updCacheCnt(); document.getElementById('cfg-modal').classList.add('on'); };
+  document.getElementById('cfg-close').onclick=()=>document.getElementById('cfg-modal').classList.remove('on');
+  document.getElementById('cfg-modal').onclick=e=>{ if(e.target===document.getElementById('cfg-modal')) document.getElementById('cfg-modal').classList.remove('on'); };
+  document.getElementById('btn-reset').onclick=()=>{
+    if(!confirm('タスクと在庫無リストをリセットしますか？')) return;
+    ['tasks','oos','oosCnt','oosRst'].forEach(k=>localStorage.removeItem(k));
+    tasks=[]; oos=[]; oosCnt={}; oosRst={};
+    renderProds(); renderTasks(); document.getElementById('cfg-modal').classList.remove('on');
+  };
+  document.getElementById('btn-clr-cache').onclick=()=>{
+    if(!confirm('商品キャッシュとスキャン履歴を削除しますか？')) return;
+    ['pCache','scanHist','codeMapping'].forEach(k=>localStorage.removeItem(k));
+    updCacheCnt(); renderHist(); document.getElementById('cfg-modal').classList.remove('on');
+    flash('キャッシュ削除完了','#f59e0b');
+  };
+  document.getElementById('btn-chat').onclick=()=>{
+    document.getElementById('cfg-modal').classList.remove('on');
+    ['prod-list','task-list','scanner-sec'].forEach(id=>document.getElementById(id).style.display='none');
+    document.getElementById('chatbot-area').style.display='';
+    document.querySelectorAll('.tab,.subtab').forEach(t=>t.classList.remove('active'));
+  };
+  document.getElementById('close-chatbot-btn').onclick=()=>{ document.getElementById('chatbot-area').style.display='none'; setTab(currentTab); };
+
+  // スキャナー
+  document.getElementById('btn-start').onclick=()=>initScanner();
+  document.getElementById('btn-stop').onclick=()=>stopScanner();
+  document.getElementById('btn-sw').onclick=()=>switchCam();
+  document.getElementById('btn-add').onclick=()=>addScanned();
+  document.getElementById('btn-oos').onclick=()=>markOOS();
+
+  // 数量
+  document.getElementById('qty-p').onclick=()=>{ const e=document.getElementById('res-qty'); e.value=Math.min(99,parseInt(e.value)+1); };
+  document.getElementById('qty-m').onclick=()=>{ const e=document.getElementById('res-qty'); e.value=Math.max(1,parseInt(e.value)-1); };
+
+  // 手動入力
+  document.getElementById('btn-manual').onclick=()=>{
+    const code=document.getElementById('manual-in').value.trim().replace(/\D/g,'');
+    if(!/^\d{7}$|^\d{13}$/.test(code)){ showAlert('7桁（POPコード）または13桁（JANコード）を入力してください'); return; }
+    document.getElementById('manual-in').value='';
+    handleCode(code);
+  };
+  document.getElementById('manual-in').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('btn-manual').click(); });
+
+  // 写真登録
+  document.getElementById('photo-in').addEventListener('change',e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=ev=>{
+      const url=ev.target.result;
+      document.getElementById('res-img').src=url;
+      curProd.imageUrl=url;
+      if(curProd.code){ const c=getCached(curProd.code)||{}; setCached(curProd.code,{...c,imageUrl:url}); }
+    }; r.readAsDataURL(f);
+  });
+
+  // スクロールトップ
+  window.addEventListener('scroll',()=>{ document.getElementById('top-btn').classList.toggle('on',window.scrollY>200); });
+  document.getElementById('top-btn').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
+
+  // 初期化
+  loadProducts(currentTab); loadTasks(); renderTasks(); updCacheCnt();
+});
+</script>
 </body>
 </html>
