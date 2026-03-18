@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>品出しアシスタント Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <!-- ZXing バーコードスキャナーライブラリ -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===== ヘッダー ===== -->
+<header class="header" role="banner">
+  <div class="header-inner">
+    <div class="header-title">
+      <span class="header-icon">🛒</span>
+      <span>品出しアシスタント</span>
+    </div>
+    <nav class="tabs" role="navigation" aria-label="カテゴリ切替">
+      <button id="tab-scanner" class="tab" aria-pressed="false">📷 スキャン</button>
+      <button id="tab-drinks" class="tab active" aria-pressed="true">飲料</button>
+      <button id="tab-paper" class="tab" aria-pressed="false">紙類</button>
+    </nav>
+    <div class="header-actions">
+      <nav class="sub-tabs" role="navigation" aria-label="表示切替">
+        <button id="subtab-products" class="subtab active" aria-pressed="true">商品</button>
+        <button id="subtab-tasks" class="subtab" aria-pressed="false">タスク</button>
+      </nav>
+      <button id="settings-btn" class="settings-btn" title="設定" aria-label="設定">⚙️</button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== メインコンテンツ ===== -->
+<main class="main" role="main">
+
+  <!-- 検索エリア（商品・飲料/紙タブ用） -->
+  <div class="search-area" id="search-area">
+    <input type="search" id="search-box" placeholder="🔍 商品名で検索" autocomplete="off" aria-label="商品名検索">
+    <div id="paper-cat-buttons" style="display:none;">
+      <button class="paper-cat-btn active" data-cat="all">全て</button>
+      <button class="paper-cat-btn" data-cat="キッチン">キッチン</button>
+      <button class="paper-cat-btn" data-cat="ティッシュ">ティッシュ</button>
+      <button class="paper-cat-btn" data-cat="トイレットペーパー">トイレ</button>
+    </div>
+  </div>
+
+  <!-- ===== スキャナータブ ===== -->
+  <section id="scanner-section" class="section" style="display:none;">
+    <div class="scanner-card">
+      <div class="scanner-header">
+        <h2 class="scanner-title">📷 バーコードスキャン</h2>
+        <p class="scanner-subtitle">JANコード(13桁) / POPコード(7桁)に対応</p>
+      </div>
+
+      <!-- カメラプレビュー -->
+      <div class="camera-area" id="camera-area">
+        <video id="scanner-video" playsinline autoplay muted></video>
+        <div class="scan-overlay">
+          <div class="scan-frame">
+            <div class="scan-line"></div>
+          </div>
+          <p class="scan-hint">バーコードをフレーム内に合わせてください</p>
+        </div>
+        <div class="camera-placeholder" id="camera-placeholder">
+          <span class="camera-icon">📷</span>
+          <p>カメラを起動してスキャン開始</p>
+        </div>
+      </div>
+
+      <!-- カメラ制御ボタン -->
+      <div class="scanner-controls">
+        <button id="start-scan-btn" class="scan-btn primary">📷 カメラ起動</button>
+        <button id="stop-scan-btn" class="scan-btn danger" style="display:none;">⏹ 停止</button>
+        <button id="switch-camera-btn" class="scan-btn secondary" style="display:none;">🔄 カメラ切替</button>
+      </div>
+
+      <!-- 手動入力 -->
+      <div class="manual-input-area">
+        <p class="manual-label">または手動でコード入力</p>
+        <div class="manual-input-row">
+          <input type="text" id="manual-code-input" placeholder="JANコードまたはPOPコード" inputmode="numeric" maxlength="13">
+          <button id="manual-search-btn" class="scan-btn primary small">検索</button>
+        </div>
+      </div>
+
+      <!-- スキャン結果 -->
+      <div id="scan-result-area" class="scan-result-area" style="display:none;">
+        <div class="result-header">
+          <span class="result-icon">✅</span>
+          <span id="result-code-label">コード: </span>
+        </div>
+        <div class="result-card" id="result-card">
+          <div class="result-img-wrap">
+            <img id="result-img" src="" alt="商品画像" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect fill=\'%23e0e7ff\' width=\'100\' height=\'100\'/><text x=\'50\' y=\'55\' text-anchor=\'middle\' fill=\'%236366f1\' font-size=\'36\'>📦</text></svg>'">
+            <label class="camera-btn-overlay" id="result-camera-btn" title="写真を撮影して商品画像に登録">
+              📷
+              <input type="file" accept="image/*" capture="environment" id="result-photo-input" style="display:none;">
+            </label>
+          </div>
+          <div class="result-info">
+            <div id="result-name" class="result-name">商品名を取得中...</div>
+            <div id="result-dept" class="result-dept"></div>
+            <div class="result-qty-row">
+              <label class="qty-label">数量</label>
+              <button class="qty-btn" id="qty-minus">－</button>
+              <input type="number" id="result-qty" value="1" min="1" max="99" class="qty-input">
+              <button class="qty-btn" id="qty-plus">＋</button>
+            </div>
+            <div class="result-actions">
+              <button id="add-to-task-btn" class="action-btn success">✅ タスクに追加</button>
+              <button id="mark-outofstock-btn" class="action-btn danger">❌ 在庫無</button>
+            </div>
+          </div>
+        </div>
+        <div id="known-badge" class="known-badge" style="display:none;">⚡ キャッシュから即座に表示</div>
+        <div id="loading-indicator" class="loading-indicator" style="display:none;">
+          <div class="spinner"></div>
+          <span>商品情報を取得中...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- スキャン履歴 -->
+    <div class="scan-history-area" id="scan-history-area">
+      <h3 class="section-title">🕐 最近スキャンした商品</h3>
+      <div id="scan-history-list"></div>
+    </div>
+  </section>
+
+  <!-- ===== 商品リスト ===== -->
+  <section id="product-list" class="product-list" aria-label="商品一覧"></section>
+
+  <!-- ===== タスクリスト ===== -->
+  <section id="task-list" class="task-list" style="display:none" aria-label="タスク一覧"></section>
+
+  <!-- ===== チャットボットエリア ===== -->
+  <section id="chatbot-area" style="display:none" aria-label="チャットサポート">
+    <button id="close-chatbot-btn" aria-label="商品一覧に戻る">← 商品一覧に戻る</button>
+    <iframe
+      src="https://udify.app/chatbot/pc59V33QbQFkT2nh"
+      style="width: 100%; height: 100%; min-height: 700px"
+      frameborder="0"
+      allow="microphone">
+    </iframe>
+  </section>
+
+  <!-- ===== 設定モーダル ===== -->
+  <div id="settings-modal" class="settings-modal" style="display:none;" role="dialog" aria-modal="true">
+    <div class="settings-modal-content">
+      <h2 class="settings-modal-title">⚙️ 設定</h2>
+      
+      <div class="settings-section">
+        <label class="settings-label">ダークモード</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="theme-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">スキャン音</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="sound-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">キャッシュ件数</label>
+        <span id="cache-count" class="settings-value">0件</span>
+      </div>
+
+      <div class="settings-btns">
+        <button id="chatbot-btn" class="settings-action-btn blue">💬 チャットサポート</button>
+        <button id="clear-cache-btn" class="settings-action-btn orange">🗑 キャッシュ削除</button>
+        <button id="reset-btn" class="settings-action-btn red">🔄 タスクリセット</button>
+      </div>
+
+      <div class="settings-modal-logo">
+        <img src="KUTSUZAWA_rogo.jpg" alt="KUTSUZAWAロゴ" loading="lazy">
+      </div>
+      <button id="close-settings" class="close-settings">閉じる</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ページトップボタン -->
+<button id="scrollTopBtn" class="scroll-top-btn" title="ページトップへ" aria-label="ページトップへ">↑</button>
+
+<!-- スキャン成功モーダル（一瞬表示） -->
+<div id="scan-flash" class="scan-flash" style="display:none;">
+  <div class="scan-flash-content">
+    <span class="scan-flash-icon">✅</span>
+    <span id="scan-flash-text">スキャン成功</span>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
