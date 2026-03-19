@@ -122,6 +122,33 @@ body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic Pr
 #link-code-in{flex:1;background:var(--bg3);color:var(--text);border:1.5px solid var(--accent2);border-radius:7px;padding:.52rem .8rem;font-size:.9rem;font-family:inherit;outline:none}
 .link-ok-btn{background:var(--accent2);color:#fff;border:none;border-radius:7px;padding:.52rem .9rem;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit}
 .link-hint{font-size:.72rem;color:var(--ok);margin-top:.35rem;min-height:1rem}
+/* コード管理モーダル */
+.code-new-form{background:var(--bg3);border-radius:.7rem;padding:.9rem;margin-bottom:1rem}
+.code-form-ttl{font-size:.85rem;font-weight:700;color:var(--accent2);margin-bottom:.6rem}
+.code-form-row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.code-input-wrap{flex:1;min-width:120px}
+.code-input-lbl{font-size:.72rem;color:var(--text3);display:block;margin-bottom:.2rem}
+.code-inp{width:100%;background:var(--bg2);color:var(--text);border:1.5px solid var(--border);border-radius:7px;padding:.48rem .7rem;font-size:.88rem;font-family:inherit;outline:none;box-sizing:border-box}
+.code-inp:focus{border-color:var(--accent2)}
+.code-arrow{font-size:1.2rem;color:var(--text3);flex-shrink:0;align-self:flex-end;padding-bottom:.45rem}
+.code-scan-btn{background:var(--accent2);color:#fff;border:none;border-radius:7px;width:34px;height:34px;font-size:.95rem;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.code-reg-btn{width:100%;background:var(--accent2);color:#fff;border:none;border-radius:8px;padding:.65rem;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit;margin-top:.6rem}
+.code-list-wrap{max-height:320px;overflow-y:auto}
+.code-item{background:var(--bg3);border-radius:.7rem;padding:.75rem .9rem;margin-bottom:.55rem;border:1px solid var(--border)}
+.code-item-header{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem}
+.code-item-img{width:44px;height:44px;object-fit:cover;border-radius:6px;background:var(--bg2);flex-shrink:0}
+.code-item-name{font-size:.88rem;font-weight:700;color:var(--text);flex:1;cursor:pointer}
+.code-item-name:hover{color:var(--accent)}
+.code-badges{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem}
+.code-badge{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:.2rem .6rem;font-size:.78rem;font-family:monospace;color:var(--text2);display:flex;align-items:center;gap:.3rem}
+.code-badge.jan{border-color:var(--accent);color:var(--accent)}
+.code-badge.pop{border-color:#f97316;color:#f97316}
+.code-item-actions{display:flex;gap:.3rem;flex-wrap:wrap}
+.code-act-btn{background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:.28rem .65rem;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
+.code-act-btn:hover{border-color:var(--accent);color:var(--accent)}
+.code-act-btn.danger:hover{border-color:var(--ng);color:var(--ng)}
+.code-edit-row{display:none;gap:.3rem;margin-top:.5rem;flex-wrap:wrap}
+.code-edit-row.on{display:flex}
 .dept-btns{display:flex;align-items:center;gap:.3rem;margin-top:.5rem;flex-wrap:wrap}
 .dept-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:18px;padding:.28rem .7rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
 .dept-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -323,10 +350,11 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
         <div class="link-area" id="link-area">
           <p>🔗 対応コードを登録（任意）</p>
           <div class="link-row">
-            <input id="link-code-in" type="text" placeholder="対応するPOPコード または JANコード" inputmode="numeric" maxlength="13">
+            <input id="link-code-in" type="text" placeholder="対応コードを入力 または スキャン" inputmode="numeric" maxlength="13">
             <button class="link-ok-btn" id="link-ok-btn">登録</button>
           </div>
           <p class="link-hint" id="link-hint"></p>
+          <p style="font-size:.72rem;color:var(--text3);margin-top:.2rem">※スキャンタブでバーコードを読み取るとここに自動入力されます</p>
         </div>
 
         <div class="manual-edit-area" id="manual-edit-area">
@@ -383,6 +411,7 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
       </div>
       <div class="set-btns">
         <button class="set-btn blue" id="btn-chat">💬 チャットサポート</button>
+        <button class="set-btn" id="btn-code-mgr" style="background:#6366f1;color:#fff">🔗 コード管理</button>
         <button class="set-btn orange" id="btn-clr-cache">🗑 キャッシュ削除</button>
         <button class="set-btn red" id="btn-reset">🔄 タスクリセット</button>
       </div>
@@ -394,6 +423,53 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
 
 <button class="top-btn" id="top-btn">↑</button>
 <div class="flash" id="flash"><div class="flash-body" id="flash-body"></div></div>
+
+<!-- コード管理モーダル -->
+<div class="modal" id="code-mgr-modal">
+  <div class="modal-body" style="max-width:500px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div class="modal-ttl" style="margin-bottom:0">🔗 コード管理</div>
+      <button id="code-mgr-close" style="background:var(--bg3);border:none;border-radius:8px;padding:.4rem .8rem;color:var(--text2);cursor:pointer;font-family:inherit;font-size:.85rem">閉じる</button>
+    </div>
+
+    <!-- 新規登録フォーム -->
+    <div class="code-new-form">
+      <p class="code-form-ttl">➕ 新規コード登録</p>
+      <div class="code-form-row">
+        <div class="code-input-wrap">
+          <label class="code-input-lbl">JANコード（13桁）</label>
+          <div style="display:flex;gap:.3rem">
+            <input id="new-jan" type="text" placeholder="スキャンまたは手入力" inputmode="numeric" maxlength="13" class="code-inp">
+            <button class="code-scan-btn" id="scan-for-jan" title="スキャンで入力">📷</button>
+          </div>
+        </div>
+        <div class="code-arrow">⇄</div>
+        <div class="code-input-wrap">
+          <label class="code-input-lbl">POPコード（7桁）</label>
+          <div style="display:flex;gap:.3rem">
+            <input id="new-pop" type="text" placeholder="スキャンまたは手入力" inputmode="numeric" maxlength="7" class="code-inp">
+            <button class="code-scan-btn" id="scan-for-pop" title="スキャンで入力">📷</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:.4rem;margin-top:.6rem">
+        <input id="new-name" type="text" placeholder="商品名（省略可・未入力は自動取得）" class="code-inp" style="flex:1">
+      </div>
+      <button id="btn-add-code" class="code-reg-btn">登録する</button>
+    </div>
+
+    <!-- スキャン中インジケーター -->
+    <div id="code-scan-active" style="display:none;text-align:center;padding:.5rem;background:rgba(99,102,241,.1);border-radius:8px;font-size:.85rem;color:var(--accent2);margin-bottom:.6rem">
+      📷 バーコードをスキャンしてください… <button id="cancel-code-scan" style="margin-left:.5rem;background:var(--ng);color:#fff;border:none;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem">キャンセル</button>
+    </div>
+
+    <!-- 登録済みコード一覧 -->
+    <div class="code-list-wrap">
+      <p class="code-form-ttl">📋 登録済みコード一覧</p>
+      <div id="code-list"></div>
+    </div>
+  </div>
+</div>
 
 <!-- デバッグパネル（iPhoneで🐛ボタンを押すと表示） -->
 <div id="dbg-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.92);color:#0f0;font-size:11px;font-family:monospace;padding:.5rem;z-index:9999;max-height:40vh;overflow-y:auto;border-top:2px solid #0f0">
@@ -824,6 +900,37 @@ async function onCode(code) {
   lastCode = code;
   lastScanTime = now;
   if (!/^\d{7}$|^\d{13}$/.test(code)) return;
+
+  // コード管理モーダルへのスキャン入力
+  if (codeScanTarget) {
+    if (codeScanTarget === 'jan') {
+      if (!/^\d{13}$/.test(code)) { showFlash('⚠️ JANコードは13桁です', '#f59e0b'); return; }
+      document.getElementById('new-jan').value = code;
+    } else if (codeScanTarget === 'pop') {
+      if (!/^\d{7}$/.test(code)) { showFlash('⚠️ POPコードは7桁です', '#f59e0b'); return; }
+      document.getElementById('new-pop').value = code;
+    }
+    codeScanTarget = null; codeScanField = null;
+    document.getElementById('code-scan-active').style.display = 'none';
+    showFlash('✅ コードを入力しました: ' + code);
+    return;
+  }
+
+  // 結果エリアの紐付け入力へのスキャン
+  const resArea = document.getElementById('res-area');
+  if (resArea.classList.contains('on') && curProd.code) {
+    const linkIn = document.getElementById('link-code-in');
+    if (document.activeElement !== linkIn && linkIn.value === '') {
+      // link-areaが表示されていてlink-code-inが空の場合、自動入力
+      const linkArea = document.getElementById('link-area');
+      if (linkArea.offsetParent !== null) {
+        linkIn.value = code;
+        showFlash('📷 対応コード入力: ' + code);
+        return;
+      }
+    }
+  }
+
   // 紐付けコードがあれば優先使用
   const linked = getLinkedCode(code);
   if (linked) {
@@ -1458,6 +1565,168 @@ document.addEventListener('DOMContentLoaded', () => {
       b.classList.add('active');
     });
   });
+
+  // ================================================
+  // コード管理モーダル
+  // ================================================
+  let codeScanTarget = null; // 'jan' or 'pop' or null
+
+  function openCodeMgr() {
+    document.getElementById('cfg-modal').classList.remove('on');
+    renderCodeList();
+    document.getElementById('code-mgr-modal').classList.add('on');
+  }
+
+  function renderCodeList() {
+    const list = document.getElementById('code-list');
+    const map = getCodeMap();
+    const cache = getCache();
+    // マップから一意なペアを抽出
+    const seen = new Set();
+    const pairs = [];
+    Object.entries(map).forEach(([a, b]) => {
+      const key = [a,b].sort().join('|');
+      if (!seen.has(key)) { seen.add(key); pairs.push([a,b]); }
+    });
+    if (!pairs.length) {
+      list.innerHTML = '<p style="color:var(--text3);font-size:.85rem;text-align:center;padding:1rem">登録済みコードがありません</p>';
+      return;
+    }
+    list.innerHTML = '';
+    pairs.forEach(([a, b]) => {
+      const jan = a.length === 13 ? a : b;
+      const pop = a.length === 7  ? a : b;
+      const info = cache[jan] || cache[pop] || {};
+      const el = document.createElement('div');
+      el.className = 'code-item';
+      el.dataset.jan = jan;
+      el.dataset.pop = pop;
+      // ヘッダー
+      const hdr = document.createElement('div'); hdr.className = 'code-item-header';
+      const img = document.createElement('img'); img.className = 'code-item-img';
+      img.src = info.imageUrl || ''; img.alt = '';
+      img.onerror = () => { img.onerror=null; img.src=''; };
+      const nm = document.createElement('div'); nm.className = 'code-item-name';
+      nm.textContent = info.name || '（商品名未登録）';
+      nm.onclick = () => editRow.classList.toggle('on');
+      hdr.appendChild(img); hdr.appendChild(nm);
+      // バッジ
+      const badges = document.createElement('div'); badges.className = 'code-badges';
+      if (jan) {
+        const jb = document.createElement('div'); jb.className = 'code-badge jan';
+        jb.innerHTML = '<span>JAN</span><span>' + jan + '</span>';
+        badges.appendChild(jb);
+      }
+      if (pop) {
+        const pb = document.createElement('div'); pb.className = 'code-badge pop';
+        pb.innerHTML = '<span>POP</span><span>' + pop + '</span>';
+        badges.appendChild(pb);
+      }
+      // 操作ボタン
+      const acts = document.createElement('div'); acts.className = 'code-item-actions';
+      const editBtn = mkCodeActBtn('✏️ 編集', '', () => editRow.classList.toggle('on'));
+      const delBtn  = mkCodeActBtn('🗑 削除', 'danger', () => {
+        if (!confirm('「' + (info.name||'このコード') + '」の紐付けを削除しますか？')) return;
+        const m = getCodeMap();
+        delete m[jan]; delete m[pop];
+        setCodeMap(m);
+        renderCodeList();
+        showFlash('削除しました', '#f59e0b');
+      });
+      acts.appendChild(editBtn); acts.appendChild(delBtn);
+      // 編集行
+      const editRow = document.createElement('div'); editRow.className = 'code-edit-row';
+      const nameIn = document.createElement('input'); nameIn.className = 'code-inp';
+      nameIn.style.flex = '1'; nameIn.placeholder = '商品名を変更';
+      nameIn.value = info.name || '';
+      const janIn = document.createElement('input'); janIn.className = 'code-inp';
+      janIn.style.width = '130px'; janIn.placeholder = 'JANコード'; janIn.maxLength = 13;
+      janIn.value = jan;
+      const popIn = document.createElement('input'); popIn.className = 'code-inp';
+      popIn.style.width = '100px'; popIn.placeholder = 'POPコード'; popIn.maxLength = 7;
+      popIn.value = pop;
+      const saveBtn = document.createElement('button'); saveBtn.className = 'code-reg-btn';
+      saveBtn.style.cssText = 'width:auto;padding:.45rem .9rem;font-size:.82rem';
+      saveBtn.textContent = '保存';
+      saveBtn.onclick = () => {
+        const newName = nameIn.value.trim();
+        const newJan  = janIn.value.trim().replace(/\D/g,'');
+        const newPop  = popIn.value.trim().replace(/\D/g,'');
+        if (newJan && !/^\d{13}$/.test(newJan)) { alert('JANコードは13桁で入力してください'); return; }
+        if (newPop && !/^\d{7}$/.test(newPop)) { alert('POPコードは7桁で入力してください'); return; }
+        // 古いマッピング削除
+        const m = getCodeMap(); delete m[jan]; delete m[pop]; setCodeMap(m);
+        // キャッシュ更新
+        if (newJan || newPop) {
+          const codeA = newJan || jan; const codeB = newPop || pop;
+          if (codeA && codeB) linkCodes(codeA, codeB);
+          // 商品名更新
+          if (newName) {
+            const existing = getCached(codeA) || getCached(codeB) || {};
+            setCached(codeA, { ...existing, name: newName });
+            if (codeA !== codeB) setCached(codeB, { ...existing, name: newName });
+          }
+        }
+        showFlash('✅ 保存しました');
+        renderCodeList();
+        editRow.classList.remove('on');
+      };
+      editRow.appendChild(nameIn); editRow.appendChild(janIn);
+      editRow.appendChild(popIn); editRow.appendChild(saveBtn);
+
+      el.appendChild(hdr); el.appendChild(badges); el.appendChild(acts); el.appendChild(editRow);
+      list.appendChild(el);
+    });
+  }
+
+  function mkCodeActBtn(text, extraCls, onClick) {
+    const b = document.createElement('button');
+    b.className = 'code-act-btn' + (extraCls ? ' ' + extraCls : '');
+    b.textContent = text; b.onclick = onClick; return b;
+  }
+
+  // コード管理モーダルのボタン類
+  document.getElementById('btn-code-mgr').onclick = openCodeMgr;
+  document.getElementById('code-mgr-close').onclick = () => document.getElementById('code-mgr-modal').classList.remove('on');
+  document.getElementById('code-mgr-modal').onclick = e => { if (e.target === document.getElementById('code-mgr-modal')) document.getElementById('code-mgr-modal').classList.remove('on'); };
+
+  // 新規登録
+  document.getElementById('btn-add-code').onclick = () => {
+    const jan = document.getElementById('new-jan').value.trim().replace(/\D/g,'');
+    const pop = document.getElementById('new-pop').value.trim().replace(/\D/g,'');
+    const name = document.getElementById('new-name').value.trim();
+    if (!jan && !pop) { alert('JANコードまたはPOPコードを入力してください'); return; }
+    if (jan && !/^\d{13}$/.test(jan)) { alert('JANコードは13桁で入力してください'); return; }
+    if (pop && !/^\d{7}$/.test(pop)) { alert('POPコードは7桁で入力してください'); return; }
+    if (jan && pop) linkCodes(jan, pop);
+    if (name) {
+      if (jan) { const ex=getCached(jan)||{}; setCached(jan,{...ex,name}); }
+      if (pop) { const ex=getCached(pop)||{}; setCached(pop,{...ex,name}); }
+    }
+    document.getElementById('new-jan').value = '';
+    document.getElementById('new-pop').value = '';
+    document.getElementById('new-name').value = '';
+    showFlash('✅ 登録しました');
+    renderCodeList();
+  };
+
+  // 📷スキャンボタン（JAN用・POP用）
+  let codeScanField = null;
+  function startCodeScan(field) {
+    codeScanField = field;
+    codeScanTarget = field;
+    document.getElementById('code-scan-active').style.display = '';
+    // カメラがアクティブなら即使用、なければスキャンタブに誘導
+    if (!scanActive) {
+      showFlash('📷 スキャンタブでバーコードを読み取ってください', '#6366f1');
+    }
+  }
+  document.getElementById('scan-for-jan').onclick = () => startCodeScan('jan');
+  document.getElementById('scan-for-pop').onclick = () => startCodeScan('pop');
+  document.getElementById('cancel-code-scan').onclick = () => {
+    codeScanField = null; codeScanTarget = null;
+    document.getElementById('code-scan-active').style.display = 'none';
+  };
 
   // iPhone用写真スキャン（バーコード読み取り）
   document.getElementById('iphone-barcode-in').addEventListener('change', async e => {
