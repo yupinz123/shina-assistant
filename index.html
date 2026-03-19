@@ -505,7 +505,9 @@ async function fetchCOOP(code) {
     const coopBase = 'https://goods.jccu.coop';
     const url = coopBase + '/lineup/' + code + '.html';
     const proxy = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
+    console.log('[COOP] リクエスト:', proxy);
     const r = await fetchTimed(proxy, 9000);
+    console.log('[COOP] ステータス:', r.status, r.ok);
     if(!r.ok) return null;
     const html = await r.text();
 
@@ -575,9 +577,12 @@ async function fetchRakutenAPI(code) {
       + '&hits=1'
       + '&sort=+itemPrice'
       + '&availability=1';
+    console.log('[楽天API] リクエスト URL:', url.substring(0,80)+'...');
     const r = await fetchTimed(url, 9000);
+    console.log('[楽天API] ステータス:', r.status, r.ok);
     if(!r.ok) return null;
     const d = await r.json();
+    console.log('[楽天API] Items件数:', d.Items ? d.Items.length : 'なし', d.error||'');
     if(!d.Items || d.Items.length === 0) return null;
     const item = d.Items[0].Item;
     // 商品名のノイズ除去
@@ -608,13 +613,17 @@ async function fetchRakutenAPI(code) {
 
 // メイン取得関数
 async function fetchProduct(code) {
+  console.log('[fetchProduct] 開始:', code);
+
   // 1. キャッシュ（即時・最優先）
   const cached = getCached(code);
-  if(cached) return {...cached, fromCache:true};
+  if(cached) { console.log('[fetchProduct] キャッシュヒット'); return {...cached, fromCache:true}; }
 
   // 2. CSV内の既存商品と照合
   const fromCSV = findInCSV(code);
-  if(fromCSV) return {...fromCSV, fromCache:false};
+  if(fromCSV) { console.log('[fetchProduct] CSV照合ヒット'); return {...fromCSV, fromCache:false}; }
+
+  console.log('[fetchProduct] API並列実行開始');
 
   // 3. COOP + 楽天API + Open Food Facts を並列実行
   const [coop, rakuten, off] = await Promise.allSettled([
@@ -627,7 +636,11 @@ async function fetchProduct(code) {
   const rakutenVal = rakuten.status === 'fulfilled' ? rakuten.value : null;
   const offVal     = off.status     === 'fulfilled' ? off.value     : null;
 
-  // 優先順：COOP（COOP商品確実）> 楽天API（日本商品最強）> OFF
+  console.log('[COOP結果]', coop.status, coopVal);
+  console.log('[楽天結果]', rakuten.status, rakutenVal);
+  console.log('[OFF結果]',  off.status,  offVal);
+
+  // 優先順：COOP > 楽天API > OFF
   let name = '', imageUrl = '', source = '';
   if(coopVal?.name)         { name = coopVal.name;    imageUrl = coopVal.imageUrl||'';    source='coop'; }
   else if(rakutenVal?.name) { name = rakutenVal.name; imageUrl = rakutenVal.imageUrl||''; source='rakuten'; }
@@ -635,17 +648,17 @@ async function fetchProduct(code) {
 
   // 名前は取れたが画像がない場合、他ソースから補完
   if(name && !imageUrl) {
-    if(rakutenVal?.imageUrl)  imageUrl = rakutenVal.imageUrl;
-    else if(coopVal?.imageUrl) imageUrl = coopVal.imageUrl;
-    else if(offVal?.imageUrl)  imageUrl = offVal.imageUrl;
+    if(rakutenVal?.imageUrl)   imageUrl = rakutenVal.imageUrl;
+    else if(coopVal?.imageUrl)  imageUrl = coopVal.imageUrl;
+    else if(offVal?.imageUrl)   imageUrl = offVal.imageUrl;
   }
 
   if(name) {
-    console.log('取得成功[' + source + ']: ' + name);
+    console.log('[fetchProduct] 取得成功[' + source + ']: ' + name);
     return { name, imageUrl, dept: dept(name), fromCache: false };
   }
 
-  // 4. 全て失敗 → 手動入力モード
+  console.log('[fetchProduct] 全API失敗 → 手動入力モード');
   return { name: '', imageUrl: '', dept: 'food', fromCache: false, needsManual: true };
 }
 
