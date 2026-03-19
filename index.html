@@ -350,11 +350,11 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
         <div class="link-area" id="link-area">
           <p>🔗 対応コードを登録（任意）</p>
           <div class="link-row">
-            <input id="link-code-in" type="text" placeholder="対応コードを入力 または スキャン" inputmode="numeric" maxlength="13">
+            <input id="link-code-in" type="text" placeholder="対応コードを入力" inputmode="numeric" maxlength="13">
+            <button id="link-scan-btn" class="code-scan-btn" title="スキャンで入力" style="background:var(--accent2);color:#fff;border:none;border-radius:7px;width:34px;height:34px;font-size:.95rem;cursor:pointer;flex-shrink:0">📷</button>
             <button class="link-ok-btn" id="link-ok-btn">登録</button>
           </div>
           <p class="link-hint" id="link-hint"></p>
-          <p style="font-size:.72rem;color:var(--text3);margin-top:.2rem">※スキャンタブでバーコードを読み取るとここに自動入力されます</p>
         </div>
 
         <div class="manual-edit-area" id="manual-edit-area">
@@ -901,33 +901,27 @@ async function onCode(code) {
   lastScanTime = now;
   if (!/^\d{7}$|^\d{13}$/.test(code)) return;
 
-  // コード管理モーダルへのスキャン入力
+  // スキャン入力モード
   if (codeScanTarget) {
     if (codeScanTarget === 'jan') {
       if (!/^\d{13}$/.test(code)) { showFlash('⚠️ JANコードは13桁です', '#f59e0b'); return; }
       document.getElementById('new-jan').value = code;
+      codeScanTarget = null;
+      document.getElementById('code-scan-active').style.display = 'none';
+      showFlash('✅ JANコード入力: ' + code);
+      return;
     } else if (codeScanTarget === 'pop') {
       if (!/^\d{7}$/.test(code)) { showFlash('⚠️ POPコードは7桁です', '#f59e0b'); return; }
       document.getElementById('new-pop').value = code;
-    }
-    codeScanTarget = null; codeScanField = null;
-    document.getElementById('code-scan-active').style.display = 'none';
-    showFlash('✅ コードを入力しました: ' + code);
-    return;
-  }
-
-  // 結果エリアの紐付け入力へのスキャン
-  const resArea = document.getElementById('res-area');
-  if (resArea.classList.contains('on') && curProd.code) {
-    const linkIn = document.getElementById('link-code-in');
-    if (document.activeElement !== linkIn && linkIn.value === '') {
-      // link-areaが表示されていてlink-code-inが空の場合、自動入力
-      const linkArea = document.getElementById('link-area');
-      if (linkArea.offsetParent !== null) {
-        linkIn.value = code;
-        showFlash('📷 対応コード入力: ' + code);
-        return;
-      }
+      codeScanTarget = null;
+      document.getElementById('code-scan-active').style.display = 'none';
+      showFlash('✅ POPコード入力: ' + code);
+      return;
+    } else if (codeScanTarget === 'link') {
+      document.getElementById('link-code-in').value = code;
+      codeScanTarget = null;
+      showFlash('✅ 対応コード入力: ' + code);
+      return;
     }
   }
 
@@ -1767,6 +1761,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // 紐付けボタン
   document.getElementById('link-ok-btn').onclick = applyLinkCode;
   document.getElementById('link-code-in').addEventListener('keydown', e => { if (e.key === 'Enter') applyLinkCode(); });
+  // 紐付けエリアのスキャンボタン
+  document.getElementById('link-scan-btn').onclick = () => {
+    codeScanTarget = 'link';
+    showFlash('📷 対応コードをスキャンしてください', '#6366f1');
+  };
 
   // 写真登録
   document.getElementById('photo-in').addEventListener('change', e => {
