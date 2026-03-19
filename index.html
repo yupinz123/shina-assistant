@@ -490,27 +490,108 @@ function findInCSV(code) {
   return null;
 }
 
-// Open Food Facts v2 API
+// ① Open Food Facts v2（商品名メイン）
 async function fetchOFF(code) {
   try {
     const url = `https://world.openfoodfacts.org/api/v2/product/${code}?fields=product_name,product_name_ja,brands,image_front_url,image_url&lc=ja`;
-    const r = await fetchTimed(url, 9000);
+    const r = await fetchTimed(url, 8000);
     if(!r.ok) return null;
     const d = await r.json();
     if(d.status !== 1 || !d.product) return null;
     const p = d.product;
     const name = (p.product_name_ja || p.product_name || p.brands || '').trim();
-    if(!name || name.length < 2) return null;
     const imageUrl = p.image_front_url || p.image_url || '';
-    return { name, imageUrl };
-  } catch(e) {
-    console.log('OFF失敗:', e.message);
-    return null;
-  }
+    return { name: name.length >= 2 ? name : null, imageUrl };
+  } catch(e) { return null; }
 }
 
+// ② 楽天商品検索API（JSONP不要・CORS対応・APIキー不要版）
+// itm.rakuten.co.jp の検索結果HTMLからog:title / og:imageを抽出
+async function fetchRakuten(code) {
+  try {
+    // 楽天市場の検索URL（公開ページ）をCORSフリープロキシ経由で取得
+    // corsproxy.io は最も安定したCORSプロキシ
+    const target = `https://search.rakuten.co.jp/search/mall/${code}/`;
+    const proxy  = `https://corsproxy.io/?url=${encodeURIComponent(target)}`;
+    const r = await fetchTimed(proxy, 9000);
+    if(!r.ok) return null;
+    const html = await r.text();
+    const dp = new DOMParser();
+    const doc = dp.parseFromString(html, 'text/html');
+
+    // 商品名：最初の商品タイトルを取得
+    let name = '';
+    const titleSelectors = [
+      '.searchresultitem .title a',
+      '[class*="item"] [class*="title"] a',
+      'h2[class*="title"]',
+      '.item_name',
+    ];
+    for(const s of titleSelectors) {
+      const el = doc.querySelector(s);
+      if(el) { name = el.textContent.trim(); break; }
+    }
+    // OGタイトルにフォールバック（「楽天市場」の文字を除去）
+    if(!name) {
+      const og = doc.querySelector('meta[property="og:title"]');
+      if(og) name = (og.getAttribute('content') || '').replace(/楽天市場.*$/,'').replace(/【.*?】/g,'').trim();
+    }
+
+    // 商品画像
+    let imageUrl = '';
+    const imgEl = doc.querySelector('.image img, [class*="item"] img, .searchresultitem img');
+    if(imgEl) imageUrl = imgEl.src || imgEl.getAttribute('data-src') || '';
+    if(!imageUrl) {
+      const ogImg = doc.querySelector('meta[property="og:image"]');
+      if(ogImg) imageUrl = ogImg.getAttribute('content') || '';
+    }
+    // Rakuten画像URLを高解像度に変換
+    if(imageUrl) imageUrl = imageUrl.replace(/\?.*$/, '').replace(/_ex=\d+x\d+/,'');
+
+    if(!name || name.length < 2) return null;
+    return { name, imageUrl };
+  } catch(e) { return null; }
+}
+
+// ③ Yahoo!ショッピング（corsproxy.io経由）
+async function fetchYahooShopping(code) {
+  try {
+    const target = `https://shopping.yahoo.co.jp/search?p=${code}&view=grid`;
+    const proxy  = `https://corsproxy.io/?url=${encodeURIComponent(target)}`;
+    const r = await fetchTimed(proxy, 9000);
+    if(!r.ok) return null;
+    const html = await r.text();
+    const dp = new DOMParser();
+    const doc = dp.parseFromString(html, 'text/html');
+
+    let name = '';
+    // OGタイトルから商品名抽出
+    const og = doc.querySelector('meta[property="og:title"]');
+    if(og) {
+      name = (og.getAttribute('content') || '')
+        .replace(/Yahoo!ショッピング.*$/i, '')
+        .replace(/の検索結果.*$/,'')
+        .replace(/【.*?】/g,'')
+        .trim();
+    }
+    // 最初の商品名要素
+    if(!name || name.length < 2) {
+      const el = doc.querySelector('[class*="title"] a, [class*="name"] a');
+      if(el) name = el.textContent.trim();
+    }
+
+    let imageUrl = '';
+    const ogImg = doc.querySelector('meta[property="og:image"]');
+    if(ogImg) imageUrl = ogImg.getAttribute('content') || '';
+
+    if(!name || name.length < 2) return null;
+    return { name, imageUrl };
+  } catch(e) { return null; }
+}
+
+// メイン取得関数（並列実行で高速化）
 async function fetchProduct(code) {
-  // 1. キャッシュ（即時）
+  // 1. キャッシュ（即時・最優先）
   const cached = getCached(code);
   if(cached) return {...cached, fromCache:true};
 
@@ -518,13 +599,36 @@ async function fetchProduct(code) {
   const fromCSV = findInCSV(code);
   if(fromCSV) return {...fromCSV, fromCache:false};
 
-  // 3. Open Food Facts
-  const off = await fetchOFF(code);
-  if(off && off.name) {
-    return { name: off.name, imageUrl: off.imageUrl, dept: dept(off.name), fromCache: false };
+  // 3. OFFと楽天を並列実行（速い方を使う）
+  let name = '', imageUrl = '', source = '';
+
+  // 並列で3つ同時に叩く
+  const [off, rakuten, yahoo] = await Promise.allSettled([
+    fetchOFF(code),
+    fetchRakuten(code),
+    fetchYahooShopping(code),
+  ]);
+
+  const offVal     = off.status     === 'fulfilled' ? off.value     : null;
+  const rakutenVal = rakuten.status === 'fulfilled' ? rakuten.value : null;
+  const yahooVal   = yahoo.status   === 'fulfilled' ? yahoo.value   : null;
+
+  // 商品名：OFFが取れたら優先、なければ楽天、なければYahoo
+  if(offVal?.name)     { name = offVal.name;     source = 'off'; }
+  else if(rakutenVal?.name)  { name = rakutenVal.name;  source = 'rakuten'; }
+  else if(yahooVal?.name)    { name = yahooVal.name;    source = 'yahoo'; }
+
+  // 画像：取れたところから優先して使う（OFFは画像が少ないので楽天優先）
+  if(rakutenVal?.imageUrl)   imageUrl = rakutenVal.imageUrl;
+  else if(offVal?.imageUrl)  imageUrl = offVal.imageUrl;
+  else if(yahooVal?.imageUrl) imageUrl = yahooVal.imageUrl;
+
+  if(name) {
+    console.log(`取得成功[${source}]: ${name}`);
+    return { name, imageUrl, dept: dept(name), fromCache: false };
   }
 
-  // 4. 取得失敗 → 手動入力モード
+  // 4. 全て失敗 → 手動入力モード
   return { name: '', imageUrl: '', dept: 'food', fromCache: false, needsManual: true };
 }
 
