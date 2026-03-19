@@ -518,6 +518,8 @@ let camIdx = 0;
 let lastCode = '';
 let lastScanTime = 0;
 let curProd = { code: '', name: '', imageUrl: '', dept: 'food' };
+let codeScanTarget = null; // 'jan' | 'pop' | 'link' | null
+let codeScanField = null;
 window.searchKw = '';
 window.paperCat = null;
 
@@ -1563,7 +1565,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ================================================
   // コード管理モーダル
   // ================================================
-  let codeScanTarget = null; // 'jan' or 'pop' or null
 
   function openCodeMgr() {
     document.getElementById('cfg-modal').classList.remove('on');
@@ -1705,7 +1706,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // 📷スキャンボタン（JAN用・POP用）
-  let codeScanField = null;
   function startCodeScan(field) {
     codeScanField = field;
     codeScanTarget = field;
