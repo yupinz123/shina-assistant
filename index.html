@@ -116,6 +116,12 @@ body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic Pr
 #manual-name-in{flex:1;background:var(--bg3);color:var(--text);border:1.5px solid #f59e0b;border-radius:7px;padding:.55rem .8rem;font-size:.9rem;font-family:inherit;outline:none}
 .manual-ok-btn{background:#f59e0b;color:#fff;border:none;border-radius:7px;padding:.55rem .9rem;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit}
 .manual-hint{font-size:.72rem;color:var(--text3);margin-top:.4rem}
+.link-area{margin-top:.7rem;padding:.7rem .9rem;background:rgba(99,102,241,.08);border:1.5px solid var(--accent2);border-radius:.7rem}
+.link-area p:first-child{font-size:.8rem;color:var(--accent2);font-weight:700;margin-bottom:.4rem}
+.link-row{display:flex;gap:.4rem}
+#link-code-in{flex:1;background:var(--bg3);color:var(--text);border:1.5px solid var(--accent2);border-radius:7px;padding:.52rem .8rem;font-size:.9rem;font-family:inherit;outline:none}
+.link-ok-btn{background:var(--accent2);color:#fff;border:none;border-radius:7px;padding:.52rem .9rem;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit}
+.link-hint{font-size:.72rem;color:var(--ok);margin-top:.35rem;min-height:1rem}
 .dept-btns{display:flex;align-items:center;gap:.3rem;margin-top:.5rem;flex-wrap:wrap}
 .dept-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:18px;padding:.28rem .7rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
 .dept-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -274,6 +280,13 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
         <button id="btn-stop" class="sbtn stop" style="display:none">⏹ 停止</button>
         <button id="btn-sw" class="sbtn sw" style="display:none">🔄 切替</button>
       </div>
+      <!-- iPhone Safari用：写真撮影でスキャン -->
+      <div style="padding:.3rem 1rem .6rem;border-top:1px solid var(--border)">
+        <label id="iphone-scan-lbl" style="display:flex;align-items:center;justify-content:center;gap:.5rem;background:var(--bg3);border:1.5px dashed var(--border);border-radius:9px;padding:.6rem;cursor:pointer;font-size:.85rem;font-weight:700;color:var(--text2)">
+          📸 写真で読み取り（iPhone/Safari用）
+          <input type="file" accept="image/*" capture="environment" id="iphone-barcode-in" style="display:none">
+        </label>
+      </div>
       <div class="manual-area">
         <p>または手動でコード入力</p>
         <div class="manual-row">
@@ -306,6 +319,16 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
         </div>
         <div class="known-badge" id="known-badge">⚡ キャッシュから即座に表示</div>
         <div class="ld" id="ld"><div class="spin"></div><span>商品情報を取得中...</span></div>
+        <!-- POP↔JAN 紐付けエリア -->
+        <div class="link-area" id="link-area">
+          <p>🔗 対応コードを登録（任意）</p>
+          <div class="link-row">
+            <input id="link-code-in" type="text" placeholder="対応するPOPコード または JANコード" inputmode="numeric" maxlength="13">
+            <button class="link-ok-btn" id="link-ok-btn">登録</button>
+          </div>
+          <p class="link-hint" id="link-hint"></p>
+        </div>
+
         <div class="manual-edit-area" id="manual-edit-area">
           <p>📝 商品名を入力してください（次回から自動表示）</p>
           <div class="manual-edit-row">
@@ -372,6 +395,16 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
 <button class="top-btn" id="top-btn">↑</button>
 <div class="flash" id="flash"><div class="flash-body" id="flash-body"></div></div>
 
+<!-- デバッグパネル（iPhoneで🐛ボタンを押すと表示） -->
+<div id="dbg-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.92);color:#0f0;font-size:11px;font-family:monospace;padding:.5rem;z-index:9999;max-height:40vh;overflow-y:auto;border-top:2px solid #0f0">
+  <div style="display:flex;justify-content:space-between;margin-bottom:.3rem">
+    <span style="color:#ff0;font-weight:bold">🐛 デバッグログ</span>
+    <button onclick="document.getElementById('dbg-panel').style.display='none'" style="background:#ff0;color:#000;border:none;border-radius:4px;padding:.2rem .5rem;font-size:11px;cursor:pointer">閉じる</button>
+  </div>
+  <div id="dbg-log"></div>
+</div>
+<button id="dbg-btn" onclick="document.getElementById('dbg-panel').style.display='block'" style="position:fixed;left:14px;bottom:18px;z-index:500;background:#374151;color:#9CA3AF;border:none;border-radius:50%;width:36px;height:36px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">🐛</button>
+
 <script>
 'use strict';
 // ================================================================
@@ -419,6 +452,18 @@ const getCache = () => JSON.parse(localStorage.getItem('pCache') || '{}');
 const setCache = c => localStorage.setItem('pCache', JSON.stringify(c));
 const getHist = () => JSON.parse(localStorage.getItem('scanHist') || '[]');
 const setHist = h => localStorage.setItem('scanHist', JSON.stringify(h));
+// POP⇔JAN コードマッピング
+const getCodeMap = () => JSON.parse(localStorage.getItem('codeMap') || '{}');
+const setCodeMap = m => localStorage.setItem('codeMap', JSON.stringify(m));
+function linkCodes(codeA, codeB) {
+  const m = getCodeMap();
+  m[codeA] = codeB;
+  m[codeB] = codeA;
+  setCodeMap(m);
+}
+function getLinkedCode(code) {
+  return getCodeMap()[code] || null;
+}
 
 function getCached(code) { return getCache()[code] || null; }
 function setCached(code, data) {
@@ -588,26 +633,117 @@ async function fetchProduct(code) {
 // スキャナー
 // ================================================================
 async function initScanner() {
-  if (!('BarcodeDetector' in window)) {
-    alert('このブラウザはバーコードスキャンに対応していません。\nAndroid: Chrome最新版\niPhone: Safari 17以降\n\n手動入力をお使いください。');
-    return;
+  dbgLog('initScanner開始 UA=' + navigator.userAgent.substring(0,60));
+  if ('BarcodeDetector' in window) {
+    dbgLog('BarcodeDetector: 対応 → ネイティブAPI使用');
+    try {
+      barcodeDetector = new BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code']
+      });
+      await startCam();
+      return;
+    } catch(e) { dbgLog('BarcodeDetector初期化失敗: ' + e.message); }
+  } else {
+    dbgLog('BarcodeDetector: 非対応 → ZXingへ');
   }
-  try {
-    barcodeDetector = new BarcodeDetector({
-      formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code']
-    });
-  } catch(e) { alert('スキャナー初期化失敗: ' + e.message); return; }
-  await startCam();
+  await loadZXingAndStart();
 }
 
-async function startCam() {
+// ZXingを動的ロードしてスキャン開始
+async function loadZXingAndStart() {
+  if (window._zxingLoaded) { dbgLog('ZXing: キャッシュ済み'); await startCamZXing(); return; }
+  dbgLog('ZXing: ダウンロード開始...');
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+    s.onload = async () => { dbgLog('ZXing: 読込成功(unpkg)'); window._zxingLoaded = true; await startCamZXing(); resolve(); };
+    s.onerror = () => { dbgLog('ZXing: unpkg失敗 → jsDelivrで再試行');
+      // CDN失敗時はjsDelivrで再試行
+      const s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+      s2.onload = async () => { window._zxingLoaded = true; await startCamZXing(); resolve(); };
+      s2.onerror = () => {
+        alert('スキャナーライブラリの読み込みに失敗しました。\n\nWi-Fiまたはモバイル通信を確認して再試行してください。\n\n手動入力は引き続き使用できます。');
+        reject();
+      };
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
+  });
+}
+
+// ZXing経由でカメラ起動
+async function startCamZXing() {
+  const video = document.getElementById('scan-video');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
     });
+    video.srcObject = stream;
+    await video.play();
+    video.classList.add('on');
+    document.getElementById('cam-ph').style.display = 'none';
+    document.getElementById('scan-ov').classList.add('on');
+    document.getElementById('btn-start').style.display = 'none';
+    document.getElementById('btn-stop').style.display = '';
+    scanActive = true;
+
+    // ZXing でデコード開始
+    const hints = new Map();
+    const formats = [
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+    ];
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    const reader = new ZXing.MultiFormatReader();
+    reader.setHints(hints);
+    window._zxingReader = reader;
+
+    scanCanvas = document.createElement('canvas');
+    scanCtx = scanCanvas.getContext('2d');
+    scanLoopZXing();
+
+  } catch(e) {
+    dbgLog('startCam エラー: ' + e.name + ' ' + e.message);
+    const msg = e.name === 'NotAllowedError'
+      ? 'カメラへのアクセスが拒否されました。\nSafariの設定 → このサイト → カメラ → 許可 に変更してください。'
+      : 'カメラ起動失敗: ' + e.message;
+    alert(msg);
+  }
+}
+
+// ZXingスキャンループ
+function scanLoopZXing() {
+  if (!scanActive || !window._zxingReader) return;
+  const video = document.getElementById('scan-video');
+  if (video.readyState >= 2 && video.videoWidth > 0) {
+    scanCanvas.width = video.videoWidth;
+    scanCanvas.height = video.videoHeight;
+    scanCtx.drawImage(video, 0, 0);
+    try {
+      const lum = new ZXing.HTMLCanvasElementLuminanceSource(scanCanvas);
+      const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+      const result = window._zxingReader.decode(bmp);
+      if (result) { onCode(result.getText()); }
+    } catch(e) { /* 読み取れなかっただけなので無視 */ }
+  }
+  scanTimer = setTimeout(scanLoopZXing, 300);
+}
+
+async function startCam() {
+  dbgLog('startCam: getUserMedia開始');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    dbgLog('getUserMedia: 成功');
     const video = document.getElementById('scan-video');
     video.srcObject = stream;
     await video.play();
+    dbgLog('video.play: 成功');
     try {
       const devs = await navigator.mediaDevices.enumerateDevices();
       cameras = devs.filter(d => d.kind === 'videoinput');
@@ -647,6 +783,7 @@ function scanLoop() {
 function stopScanner() {
   scanActive = false;
   if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+  window._zxingReader = null;
   const video = document.getElementById('scan-video');
   if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
   video.classList.remove('on');
@@ -674,7 +811,9 @@ async function switchCam() {
     document.getElementById('btn-start').style.display = 'none';
     document.getElementById('btn-stop').style.display = '';
     scanActive = true;
-    scanLoop();
+    // BarcodeDetector か ZXing かで分岐
+    if (barcodeDetector) { scanLoop(); }
+    else if (window._zxingLoaded) { scanLoopZXing(); }
   } catch(e) { alert('カメラ切替失敗: ' + e.message); }
 }
 
@@ -685,6 +824,12 @@ async function onCode(code) {
   lastCode = code;
   lastScanTime = now;
   if (!/^\d{7}$|^\d{13}$/.test(code)) return;
+  // 紐付けコードがあれば優先使用
+  const linked = getLinkedCode(code);
+  if (linked) {
+    showFlash('🔗 ' + code + ' → ' + linked + ' に変換');
+    code = linked;
+  }
   if (oos.includes(code)) {
     const c = getCached(code);
     showFlash('⚠️ 在庫無登録済: ' + (c?.name || code), '#f59e0b');
@@ -730,6 +875,45 @@ async function lookup(code) {
       updCacheCnt();
     }
   }
+  // 紐付けUIを表示（7桁POP→13桁JANへの登録を促す）
+  showLinkArea(code);
+}
+
+function showLinkArea(code) {
+  const area = document.getElementById('link-area');
+  const hint = document.getElementById('link-hint');
+  document.getElementById('link-code-in').value = '';
+  const linked = getLinkedCode(code);
+  const is7 = code.length === 7;
+  const is13 = code.length === 13;
+  if (linked) {
+    hint.textContent = '✅ 登録済み: ' + linked;
+    hint.style.color = 'var(--ok)';
+  } else {
+    hint.textContent = is7 ? 'このPOPコードに対応するJANコード(13桁)を登録できます'
+                           : 'このJANコードに対応するPOPコード(7桁)を登録できます';
+    hint.style.color = 'var(--text3)';
+  }
+}
+
+function applyLinkCode() {
+  const other = document.getElementById('link-code-in').value.trim().replace(/\D/g, '');
+  if (!/^\d{7}$|^\d{13}$/.test(other)) {
+    alert('7桁（POPコード）または13桁（JANコード）を入力してください');
+    return;
+  }
+  if (other === curProd.code) { alert('同じコードは登録できません'); return; }
+  linkCodes(curProd.code, other);
+  // もし片方にキャッシュがあれば、もう片方にも同じ情報をコピー
+  const cachedA = getCached(curProd.code);
+  const cachedB = getCached(other);
+  if (cachedA && !cachedB) setCached(other, cachedA);
+  if (cachedB && !cachedA) setCached(curProd.code, cachedB);
+  const hint = document.getElementById('link-hint');
+  hint.textContent = '✅ 登録完了！次回から自動でリンクされます';
+  hint.style.color = 'var(--ok)';
+  document.getElementById('link-code-in').value = '';
+  showFlash('🔗 コードを紐付けました');
 }
 
 function showResult(info, code) {
@@ -1103,6 +1287,20 @@ function renderHist() {
 // ================================================================
 // UI ユーティリティ
 // ================================================================
+// デバッグログ（iPhoneでも画面内に表示）
+function dbgLog(msg) {
+  console.log(msg);
+  const el = document.getElementById('dbg-log');
+  if (!el) return;
+  const line = document.createElement('div');
+  line.style.borderBottom = '1px solid #1a3a1a';
+  line.style.padding = '.15rem 0';
+  line.textContent = new Date().toLocaleTimeString('ja') + ' ' + msg;
+  el.insertBefore(line, el.firstChild);
+  // 最大50行
+  while (el.children.length > 50) el.removeChild(el.lastChild);
+}
+
 function showFlash(msg, bg = '#22c55e') {
   const f = document.getElementById('flash');
   const fb = document.getElementById('flash-body');
@@ -1260,6 +1458,46 @@ document.addEventListener('DOMContentLoaded', () => {
       b.classList.add('active');
     });
   });
+
+  // iPhone用写真スキャン（バーコード読み取り）
+  document.getElementById('iphone-barcode-in').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    // まずBarcodeDetectorで試す
+    if ('BarcodeDetector' in window) {
+      try {
+        const img = await createImageBitmap(file);
+        const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','itf'] });
+        const codes = await det.detect(img);
+        if (codes.length > 0) { onCode(codes[0].rawValue); return; }
+      } catch(e) {}
+    }
+    // ZXingでデコード（iPhoneはこちら）
+    if (!window._zxingLoaded) {
+      await loadZXingAndStart().catch(() => {});
+    }
+    if (window.ZXing) {
+      try {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        await new Promise(r => { img.onload = r; });
+        const cvs = document.createElement('canvas');
+        cvs.width = img.naturalWidth; cvs.height = img.naturalHeight;
+        cvs.getContext('2d').drawImage(img, 0, 0);
+        const lum = new ZXing.HTMLCanvasElementLuminanceSource(cvs);
+        const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+        const reader = new ZXing.MultiFormatReader();
+        const result = reader.decode(bmp);
+        if (result) { onCode(result.getText()); return; }
+      } catch(err) { showFlash('バーコードを検出できませんでした', '#ef4444'); return; }
+    }
+    showFlash('読み取り失敗。明るい場所でバーコード全体が写るよう撮影してください', '#f59e0b');
+  });
+
+  // 紐付けボタン
+  document.getElementById('link-ok-btn').onclick = applyLinkCode;
+  document.getElementById('link-code-in').addEventListener('keydown', e => { if (e.key === 'Enter') applyLinkCode(); });
 
   // 写真登録
   document.getElementById('photo-in').addEventListener('change', e => {
