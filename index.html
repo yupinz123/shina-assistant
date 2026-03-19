@@ -331,7 +331,7 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
           </div>
           <div class="res-info">
             <div id="res-name">取得中...</div>
-            <div id="res-dept" class="res-dept food"></div>
+            <div id="res-dept" class="res-dept food" title="タップで部門変更" style="cursor:pointer;margin-bottom:.55rem"></div>
             <div class="qty-row">
               <span class="qty-lbl">数量</span>
               <button class="qty-btn" id="qty-m">－</button>
@@ -1640,6 +1640,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const key = [a,b].sort().join('|');
       if (!seen.has(key)) { seen.add(key); pairs.push([a,b]); }
     });
+    // キャッシュにあってマップにない単独コードも追加
+    const cacheAll = getCache();
+    Object.keys(cacheAll).forEach(code => {
+      if (!map[code]) {
+        const alreadyIn = pairs.some(([a,b]) => a===code || b===code);
+        if (!alreadyIn) pairs.push([code, '']);
+      }
+    });
     if (!pairs.length) {
       list.innerHTML = '<p style="color:var(--text3);font-size:.85rem;text-align:center;padding:1rem">登録済みコードがありません</p>';
       return;
@@ -1764,10 +1772,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!jan && !pop) { alert('JANコードまたはPOPコードを入力してください'); return; }
     if (jan && !/^\d{13}$/.test(jan)) { alert('JANコードは13桁で入力してください'); return; }
     if (pop && !/^\d{7}$/.test(pop)) { alert('POPコードは7桁で入力してください'); return; }
+    // どちらか1つだけでも登録（両方あれば紐付けも）
     if (jan && pop) linkCodes(jan, pop);
-    if (name) {
-      if (jan) { const ex=getCached(jan)||{}; setCached(jan,{...ex,name}); }
-      if (pop) { const ex=getCached(pop)||{}; setCached(pop,{...ex,name}); }
+    // 片方だけの場合はキャッシュに情報だけ登録
+    const code = jan || pop;
+    if (code) {
+      const ex = getCached(code) || {};
+      const updated = { ...ex };
+      if (name) updated.name = name;
+      // JANのみの場合はpopCode='none'でマーク、POPのみはjanCode='none'でマーク
+      if (jan && !pop) updated._janOnly = true;
+      if (pop && !jan) updated._popOnly = true;
+      setCached(code, updated);
+      if (jan && pop) setCached(jan, { ...getCached(jan)||{}, ...updated });
     }
     document.getElementById('new-jan').value = '';
     document.getElementById('new-pop').value = '';
