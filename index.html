@@ -490,6 +490,32 @@ function findInCSV(code) {
   return null;
 }
 
+// ★ COOP商品サイトから直接取得（JANコードでページが確定）
+async function fetchCOOP(code) {
+  try {
+    const url = `https://goods.jccu.coop/lineup/${code}.html`;
+    // CORSプロキシ経由（COOPサイトはCORS非対応）
+    const proxy = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+    const r = await fetchTimed(proxy, 9000);
+    if(!r.ok) return null;
+    const html = await r.text();
+    const dp = new DOMParser();
+    const doc = dp.parseFromString(html, 'text/html');
+    // 商品名：h1タグ（例: ＣＯ・ＯＰ トマトケチャップ ５００ｇ）
+    const h1 = doc.querySelector('h1');
+    if(!h1) return null;
+    const name = h1.textContent.trim();
+    if(!name || name.length < 2) return null;
+    // 商品画像：最初の com-images の img
+    let imageUrl = '';
+    const imgs = doc.querySelectorAll('img[src*="com-images"]');
+    if(imgs.length > 0) imageUrl = imgs[0].src || imgs[0].getAttribute('src') || '';
+    // 相対URLを絶対URLに変換
+    if(imageUrl && imageUrl.startsWith('/')) imageUrl = 'https://goods.jccu.coop' + imageUrl;
+    return { name, imageUrl };
+  } catch(e) { return null; }
+}
+
 // ① Open Food Facts v2（商品名メイン）
 async function fetchOFF(code) {
   try {
@@ -589,7 +615,7 @@ async function fetchYahooShopping(code) {
   } catch(e) { return null; }
 }
 
-// メイン取得関数（並列実行で高速化）
+// メイン取得関数
 async function fetchProduct(code) {
   // 1. キャッシュ（即時・最優先）
   const cached = getCached(code);
@@ -599,32 +625,36 @@ async function fetchProduct(code) {
   const fromCSV = findInCSV(code);
   if(fromCSV) return {...fromCSV, fromCache:false};
 
-  // 3. OFFと楽天を並列実行（速い方を使う）
-  let name = '', imageUrl = '', source = '';
-
-  // 並列で3つ同時に叩く
-  const [off, rakuten, yahoo] = await Promise.allSettled([
+  // 3. COOP商品サイト（直接）+ OFF + 楽天 + Yahoo を並列実行
+  const [coop, off, rakuten, yahoo] = await Promise.allSettled([
+    fetchCOOP(code),
     fetchOFF(code),
     fetchRakuten(code),
     fetchYahooShopping(code),
   ]);
 
+  const coopVal    = coop.status    === 'fulfilled' ? coop.value    : null;
   const offVal     = off.status     === 'fulfilled' ? off.value     : null;
   const rakutenVal = rakuten.status === 'fulfilled' ? rakuten.value : null;
   const yahooVal   = yahoo.status   === 'fulfilled' ? yahoo.value   : null;
 
-  // 商品名：OFFが取れたら優先、なければ楽天、なければYahoo
-  if(offVal?.name)     { name = offVal.name;     source = 'off'; }
-  else if(rakutenVal?.name)  { name = rakutenVal.name;  source = 'rakuten'; }
-  else if(yahooVal?.name)    { name = yahooVal.name;    source = 'yahoo'; }
+  // 商品名の優先順：COOP > OFF > 楽天 > Yahoo
+  let name = '', imageUrl = '', source = '';
+  if(coopVal?.name)          { name = coopVal.name;    imageUrl = coopVal.imageUrl||'';    source='coop'; }
+  else if(offVal?.name)      { name = offVal.name;     imageUrl = offVal.imageUrl||'';     source='off'; }
+  else if(rakutenVal?.name)  { name = rakutenVal.name; imageUrl = rakutenVal.imageUrl||''; source='rakuten'; }
+  else if(yahooVal?.name)    { name = yahooVal.name;   imageUrl = yahooVal.imageUrl||'';   source='yahoo'; }
 
-  // 画像：取れたところから優先して使う（OFFは画像が少ないので楽天優先）
-  if(rakutenVal?.imageUrl)   imageUrl = rakutenVal.imageUrl;
-  else if(offVal?.imageUrl)  imageUrl = offVal.imageUrl;
-  else if(yahooVal?.imageUrl) imageUrl = yahooVal.imageUrl;
+  // 画像だけ別ソースから補完（名前は取れたが画像がない場合）
+  if(name && !imageUrl) {
+    if(coopVal?.imageUrl)    imageUrl = coopVal.imageUrl;
+    else if(rakutenVal?.imageUrl) imageUrl = rakutenVal.imageUrl;
+    else if(offVal?.imageUrl)    imageUrl = offVal.imageUrl;
+    else if(yahooVal?.imageUrl)  imageUrl = yahooVal.imageUrl;
+  }
 
   if(name) {
-    console.log(`取得成功[${source}]: ${name}`);
+    console.log('取得成功['+source+']: '+name);
     return { name, imageUrl, dept: dept(name), fromCache: false };
   }
 
@@ -1024,11 +1054,23 @@ function renderTasks(){
 // タスクアイテム生成
 function mkTaskItem(t){
   const el=document.createElement('div'); el.className='task-item';
-  const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='52' height='52'><rect fill='%23374151' width='52' height='52'/></svg>`;
-  el.innerHTML=`<div class="ti-l"><img class="task-img" src="${t.imageUrl}" alt="" onerror="this.onerror=null;this.src='${fallback}'"><div><div class="task-name">${t.name}</div>${t.isScanned?'<div class="task-badge">📷 スキャン</div>':''}</div></div><div class="ti-r"><button class="btn-ok">運搬済</button><button class="btn-nc">未運搬</button><button class="btn-del">削除</button></div>`;
-  el.querySelector('.btn-ok').onclick=()=>{ t.status='carried'; saveTasks(); renderTasks(); };
-  el.querySelector('.btn-nc').onclick=()=>{ t.status='not-carried'; saveTasks(); renderTasks(); };
-  el.querySelector('.btn-del').onclick=()=>delTask(t.taskUid);
+  // 左側：画像＋名前
+  const l=document.createElement('div'); l.className='ti-l';
+  const img=document.createElement('img'); img.className='task-img';
+  img.src=t.imageUrl||''; img.alt='';
+  img.onerror=()=>{ img.onerror=null; img.src=''; };
+  const info=document.createElement('div');
+  const nm=document.createElement('div'); nm.className='task-name'; nm.textContent=t.name;
+  info.appendChild(nm);
+  if(t.isScanned){ const b=document.createElement('div'); b.className='task-badge'; b.textContent='📷 スキャン'; info.appendChild(b); }
+  l.appendChild(img); l.appendChild(info);
+  // 右側：ボタン
+  const r=document.createElement('div'); r.className='ti-r';
+  const ok=btn('運搬済','btn-ok'); ok.onclick=()=>{ t.status='carried'; saveTasks(); renderTasks(); };
+  const nc=btn('未運搬','btn-nc'); nc.onclick=()=>{ t.status='not-carried'; saveTasks(); renderTasks(); };
+  const dl=btn('削除','btn-del');  dl.onclick=()=>delTask(t.taskUid);
+  r.appendChild(ok); r.appendChild(nc); r.appendChild(dl);
+  el.appendChild(l); el.appendChild(r);
   return el;
 }
 function mkPaperItem(id,p,tot,crd){
@@ -1042,14 +1084,20 @@ function mkPaperItem(id,p,tot,crd){
 }
 function mkNCItem(t){
   const el=document.createElement('div'); el.className='task-item nc';
-  const fallback=`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='52' height='52'><rect fill='%23374151' width='52' height='52'/></svg>`;
-  el.innerHTML=`<div class="ti-l"><img class="task-img" src="${t.imageUrl}" alt="" onerror="this.onerror=null;this.src='${fallback}'"><div class="task-name">${t.name}</div></div><div class="ti-r"><button class="btn-ok">運搬済</button><button class="btn-nc">在庫無</button><button class="btn-del">削除</button></div>`;
-  el.querySelector('.btn-ok').onclick=()=>{ t.status='carried'; saveTasks(); renderTasks(); };
-  el.querySelector('.btn-nc').onclick=()=>{
+  const l=document.createElement('div'); l.className='ti-l';
+  const img=document.createElement('img'); img.className='task-img';
+  img.src=t.imageUrl||''; img.alt=''; img.onerror=()=>{ img.onerror=null; img.src=''; };
+  const nm=document.createElement('div'); nm.className='task-name'; nm.textContent=t.name;
+  l.appendChild(img); l.appendChild(nm);
+  const r=document.createElement('div'); r.className='ti-r';
+  const ok=btn('運搬済','btn-ok'); ok.onclick=()=>{ t.status='carried'; saveTasks(); renderTasks(); };
+  const nc=btn('在庫無','btn-nc'); nc.onclick=()=>{
     if(!oos.includes(t.id)){ oos.push(t.id); const st=tasks.filter(x=>x.id===t.id); oosCnt[t.id]=st.length; oosRst[t.id]=st.map(x=>x.status); localStorage.setItem('oos',JSON.stringify(oos)); localStorage.setItem('oosCnt',JSON.stringify(oosCnt)); localStorage.setItem('oosRst',JSON.stringify(oosRst)); }
     tasks=tasks.filter(x=>x.id!==t.id); saveTasks(); renderProds(); renderTasks();
   };
-  el.querySelector('.btn-del').onclick=()=>delTask(t.taskUid);
+  const dl=btn('削除','btn-del'); dl.onclick=()=>delTask(t.taskUid);
+  r.appendChild(ok); r.appendChild(nc); r.appendChild(dl);
+  el.appendChild(l); el.appendChild(r);
   return el;
 }
 function mkSecList(title, extraClass){
