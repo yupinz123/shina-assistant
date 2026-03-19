@@ -504,12 +504,22 @@ async function fetchCOOP(code) {
   try {
     const coopBase = 'https://goods.jccu.coop';
     const url = coopBase + '/lineup/' + code + '.html';
-    const proxy = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
-    console.log('[COOP] リクエスト:', proxy);
-    const r = await fetchTimed(proxy, 9000);
-    console.log('[COOP] ステータス:', r.status, r.ok);
-    if(!r.ok) return null;
-    const html = await r.text();
+    // 複数プロキシを順番に試す
+    const proxies = [
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+      'https://corsproxy.io/?url=' + encodeURIComponent(url),
+      'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
+    ];
+    let html = '';
+    for(const proxy of proxies) {
+      console.log('[COOP] プロキシ試行:', proxy.substring(0,60)+'...');
+      try {
+        const r = await fetchTimed(proxy, 8000);
+        console.log('[COOP] ステータス:', r.status, r.ok);
+        if(r.ok) { html = await r.text(); break; }
+      } catch(e) { console.log('[COOP] プロキシ失敗:', e.message); }
+    }
+    if(!html) return null;
 
     // --- 商品名抽出 ---
     // HTMLテキストから直接正規表現で抽出（DOMParserはプロキシ経由だと相対URL問題が出る）
@@ -570,19 +580,20 @@ async function fetchRakutenAPI(code) {
   try {
     // localStorageからAPIキーを取得（設定画面で保存済み）
     const appId = localStorage.getItem('rakutenAppId') || 'a4188cfb-d202-442d-9733-c0079ebe8587';
+    // 楽天商品検索API正式パラメータ
     const url = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706'
       + '?format=json'
-      + '&keyword=' + encodeURIComponent(code)
       + '&applicationId=' + appId
-      + '&hits=1'
-      + '&sort=+itemPrice'
-      + '&availability=1';
+      + '&keyword=' + encodeURIComponent(code)
+      + '&hits=3'
+      + '&imageFlag=1';
     console.log('[楽天API] リクエスト URL:', url.substring(0,80)+'...');
     const r = await fetchTimed(url, 9000);
     console.log('[楽天API] ステータス:', r.status, r.ok);
     if(!r.ok) return null;
     const d = await r.json();
-    console.log('[楽天API] Items件数:', d.Items ? d.Items.length : 'なし', d.error||'');
+    console.log('[楽天API] レスポンス:', JSON.stringify(d).substring(0,200));
+    if(d.error) { console.log('[楽天API] エラー:', d.error, d.error_description); return null; }
     if(!d.Items || d.Items.length === 0) return null;
     const item = d.Items[0].Item;
     // 商品名のノイズ除去
