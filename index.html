@@ -518,8 +518,7 @@ async function fetchCOOP(code) {
       // HTMLタグを除去してテキストだけ取得
       name = h1m[1].replace(/<[^>]+>/g,'').trim();
       // 全角スペースや改行を整理
-      name = name.replace(/[
-	]/g,' ').replace(/\s+/g,' ').trim();
+      name = name.replace(/\r?\n|\t/g,' ').replace(/  +/g,' ').trim();
     }
     if(!name || name.length < 2) return null;
 
@@ -589,7 +588,7 @@ async function fetchRakutenAPI(code) {
     // 長すぎる場合は最初の30文字（商品名の核心部分）
     if(name.length > 50) {
       // 「×」「/」「,」などの区切りより前を商品名とする
-      const cut = name.search(/[×\/,＋+]|\d+個|\d+本|\d+枚|\d+缶/);
+      const cut = name.search(/×|\/|,|＋|\d+個|\d+本|\d+枚|\d+缶/);
       if(cut > 4) name = name.substring(0, cut).trim();
     }
     // 画像URL（楽天は複数枚あるので1枚目）
