@@ -509,8 +509,35 @@ async function fetchCOOP(code) {
   return null;
 }
 
-// 楽天市場API（公式）
+// 楽天全国スーパー直接アクセス（APIキー不要・CORS不要）
+// URL例: https://netsuper.rakuten.co.jp/beisia/item/{JANコード}/
 async function fetchRakuten(code) {
+  // 複数のスーパーで試す
+  const stores = ['beisia', 'ohsakaya', 'maxvalu', 'seiyu'];
+  for (const store of stores) {
+    try {
+      const url = 'https://netsuper.rakuten.co.jp/' + store + '/item/' + code + '/';
+      const r = await timedFetch(url, 8000);
+      if (!r.ok) continue;
+      const html = await r.text();
+      // 商品名: h1タグから取得
+      const nm = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
+      if (!nm) continue;
+      let name = nm[1].trim();
+      if (!name || name.length < 2) continue;
+      // 画像URL: netsuper.r10s.jp の画像パターン
+      const im = html.match(/https:\/\/netsuper\.r10s\.jp\/item\/[^"'\s]+\.jpg/);
+      const imageUrl = im ? im[0].replace(/\?.*$/, '') : '';
+      console.log('[楽天スーパー] 取得成功(' + store + '):', name);
+      return { name, imageUrl };
+    } catch(e) { continue; }
+  }
+  // フォールバック: 楽天市場API
+  return fetchRakutenAPI(code);
+}
+
+// 楽天市場API（フォールバック）
+async function fetchRakutenAPI(code) {
   const appId = localStorage.getItem('rakutenAppId') || RAKUTEN_APP_ID;
   try {
     const url = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706'
@@ -519,16 +546,13 @@ async function fetchRakuten(code) {
       + '&keyword=' + encodeURIComponent(code)
       + '&hits=3';
     const r = await timedFetch(url, 9000);
-    if (!r.ok) { console.log('[楽天] ステータス:', r.status); return null; }
+    if (!r.ok) return null;
     const d = await r.json();
-    if (d.error) { console.log('[楽天] エラー:', d.error, d.error_description); return null; }
-    if (!d.Items || d.Items.length === 0) return null;
+    if (d.error || !d.Items || d.Items.length === 0) return null;
     const item = d.Items[0].Item;
-    // 商品名のノイズ除去
     let name = (item.itemName || '').trim();
     name = name.replace(/【[^】]*】/g, '').replace(/\s+/g, ' ').trim();
     if (name.length > 50) {
-      // 長すぎる場合は区切り文字で切る
       const cut = name.search(/[×,＋]/);
       if (cut > 4) name = name.substring(0, cut).trim();
     }
@@ -538,7 +562,7 @@ async function fetchRakuten(code) {
     }
     if (!name || name.length < 2) return null;
     return { name, imageUrl };
-  } catch(e) { console.log('[楽天] 例外:', e.message); return null; }
+  } catch(e) { return null; }
 }
 
 // Open Food Facts
