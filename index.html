@@ -1028,6 +1028,47 @@ function applyLinkCode() {
   showFlash('🔗 コードを紐付けました');
 }
 
+// ================================================================
+// 部門ピッカー（グローバル関数 - showResultから呼べるように）
+// ================================================================
+function openDeptPicker(currentDept) {
+  const picker = document.getElementById('dept-picker');
+  const btns = document.getElementById('dept-picker-btns');
+  btns.innerHTML = '';
+  const depts = [
+    ['food','食品','#3B82F6'],
+    ['daily_jp','和日配','#ec4899'],
+    ['daily_we','洋日配','#f97316'],
+    ['snack','菓子','#a855f7'],
+    ['drink','飲料','#06b6d4'],
+    ['paper','紙類','#22c55e'],
+  ];
+  depts.forEach(([val, lbl, color]) => {
+    const b = document.createElement('button');
+    b.textContent = lbl;
+    const isSelected = val === currentDept;
+    b.style.cssText = 'padding:.75rem;border-radius:9px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit;border:2.5px solid ' + color + ';background:' + (isSelected ? color : 'transparent') + ';color:' + (isSelected ? '#fff' : color) + ';transition:all .15s';
+    b.onclick = () => { applyDeptChange(val); closeDeptPicker(); };
+    btns.appendChild(b);
+  });
+  picker.style.display = 'flex';
+}
+function closeDeptPicker() {
+  document.getElementById('dept-picker').style.display = 'none';
+}
+function applyDeptChange(newDept) {
+  curProd.dept = newDept;
+  const dd = document.getElementById('res-dept');
+  dd.textContent = (DEPT_LABEL[newDept] || '食品') + ' ✏️';
+  dd.className = 'res-dept ' + newDept;
+  dd.onclick = () => openDeptPicker(newDept);
+  if (curProd.code) {
+    const ex = getCached(curProd.code) || {};
+    setCached(curProd.code, { ...ex, dept: newDept });
+  }
+  showFlash('部門を「' + DEPT_LABEL[newDept] + '」に変更しました');
+}
+
 function showResult(info, code) {
   document.getElementById('res-name').textContent = info.name || '（名称未取得）';
   document.getElementById('res-img').src = info.imageUrl || '';
@@ -1566,47 +1607,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('manual-in').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-manual').click(); });
   document.getElementById('manual-ok-btn').onclick = applyManualName;
   document.getElementById('manual-name-in').addEventListener('keydown', e => { if (e.key === 'Enter') applyManualName(); });
-  // 部門ピッカー
-  function openDeptPicker(currentDept) {
-    const picker = document.getElementById('dept-picker');
-    const btns = document.getElementById('dept-picker-btns');
-    btns.innerHTML = '';
-    const depts = [
-      ['food','食品','#3B82F6'],
-      ['daily_jp','和日配','#ec4899'],
-      ['daily_we','洋日配','#f97316'],
-      ['snack','菓子','#a855f7'],
-      ['drink','飲料','#06b6d4'],
-      ['paper','紙類','#22c55e'],
-    ];
-    depts.forEach(([val, lbl, color]) => {
-      const b = document.createElement('button');
-      b.textContent = lbl;
-      const isSelected = val === currentDept;
-      b.style.cssText = 'padding:.75rem;border-radius:9px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit;border:2.5px solid ' + color + ';background:' + (isSelected ? color : 'transparent') + ';color:' + (isSelected ? '#fff' : color) + ';transition:all .15s';
-      b.onclick = () => {
-        applyDeptChange(val);
-        closeDeptPicker();
-      };
-      btns.appendChild(b);
-    });
-    picker.style.display = 'flex';
-  }
-  function closeDeptPicker() {
-    document.getElementById('dept-picker').style.display = 'none';
-  }
-  function applyDeptChange(newDept) {
-    curProd.dept = newDept;
-    const dd = document.getElementById('res-dept');
-    dd.textContent = DEPT_LABEL[newDept] || 'その他';
-    dd.className = 'res-dept ' + newDept;
-    // キャッシュも更新
-    if (curProd.code) {
-      const ex = getCached(curProd.code) || {};
-      setCached(curProd.code, { ...ex, dept: newDept });
-    }
-    showFlash('部門を「' + DEPT_LABEL[newDept] + '」に変更しました');
-  }
+  // 部門ピッカー背景クリックで閉じる
   document.getElementById('dept-picker').onclick = e => {
     if (e.target === document.getElementById('dept-picker')) closeDeptPicker();
   };
