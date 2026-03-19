@@ -522,16 +522,25 @@ async function fetchCOOP(code) {
     if(!html) return null;
 
     // --- 商品名抽出 ---
-    // HTMLテキストから直接正規表現で抽出（DOMParserはプロキシ経由だと相対URL問題が出る）
+    // <title>タグから取得: 「商品名｜商品情報｜...」の形式
+    // titleは必ず商品名から始まるので確実
     let name = '';
-    // h1タグ内のテキストを抽出
-    const h1m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-    if(h1m) {
-      // HTMLタグを除去してテキストだけ取得
-      name = h1m[1].replace(/<[^>]+>/g,'').trim();
-      // 全角スペースや改行を整理
-      name = name.replace(/\r?\n|\t/g,' ').replace(/  +/g,' ').trim();
+    const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if(titleM) {
+      // ｜ や | で区切って最初の部分だけ取得
+      name = titleM[1].split(/[｜|]/)[0].trim();
     }
+    // titleで取れなかった場合、2つ目のh1を取得（1つ目はロゴ）
+    if(!name || name.length < 2) {
+      const h1all = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)];
+      if(h1all.length >= 2) {
+        name = h1all[1][1].replace(/<[^>]+>/g,'').trim();
+      } else if(h1all.length === 1) {
+        name = h1all[0][1].replace(/<[^>]+>/g,'').trim();
+      }
+    }
+    name = name.replace(/?
+|	/g,' ').replace(/  +/g,' ').trim();
     if(!name || name.length < 2) return null;
 
     // --- 商品画像URL抽出 ---
@@ -580,13 +589,12 @@ async function fetchRakutenAPI(code) {
   try {
     // localStorageからAPIキーを取得（設定画面で保存済み）
     const appId = localStorage.getItem('rakutenAppId') || 'a4188cfb-d202-442d-9733-c0079ebe8587';
-    // 楽天商品検索API正式パラメータ
+    // 楽天商品検索API - JANコードでキーワード検索
     const url = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706'
       + '?format=json'
       + '&applicationId=' + appId
       + '&keyword=' + encodeURIComponent(code)
-      + '&hits=3'
-      + '&imageFlag=1';
+      + '&hits=3';
     console.log('[楽天API] リクエスト URL:', url.substring(0,80)+'...');
     const r = await fetchTimed(url, 9000);
     console.log('[楽天API] ステータス:', r.status, r.ok);
