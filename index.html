@@ -366,6 +366,15 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
         <label class="tgl"><input type="checkbox" id="sound-tgl" checked><span class="tgl-sl"></span></label>
       </div>
       <div class="set-row">
+        <span class="set-lbl">楽天APIキー</span>
+        <span class="set-val" id="rakuten-key-status" style="font-size:.72rem">設定済み✅</span>
+      </div>
+      <div style="margin-bottom:.8rem">
+        <input id="rakuten-key-in" type="text" placeholder="APIキーを変更する場合に入力"
+          style="width:100%;background:var(--bg3);color:var(--text);border:1.5px solid var(--border);border-radius:7px;padding:.5rem .8rem;font-size:.78rem;font-family:inherit;outline:none;box-sizing:border-box">
+        <button onclick="saveRakutenKey()" style="margin-top:.4rem;width:100%;background:var(--accent2);color:#fff;border:none;border-radius:7px;padding:.45rem;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit">保存</button>
+      </div>
+      <div class="set-row">
         <span class="set-lbl">キャッシュ件数</span>
         <span class="set-val" id="cache-cnt">0件</span>
       </div>
@@ -555,86 +564,47 @@ async function fetchOFF(code) {
 
 // ② 楽天商品検索API（JSONP不要・CORS対応・APIキー不要版）
 // itm.rakuten.co.jp の検索結果HTMLからog:title / og:imageを抽出
-async function fetchRakuten(code) {
+// ② 楽天商品検索API（公式・確実）
+async function fetchRakutenAPI(code) {
   try {
-    // 楽天市場の検索URL（公開ページ）をCORSフリープロキシ経由で取得
-    // corsproxy.io は最も安定したCORSプロキシ
-    const target = `https://search.rakuten.co.jp/search/mall/${code}/`;
-    const proxy  = `https://corsproxy.io/?url=${encodeURIComponent(target)}`;
-    const r = await fetchTimed(proxy, 9000);
+    // localStorageからAPIキーを取得（設定画面で保存済み）
+    const appId = localStorage.getItem('rakutenAppId') || 'a4188cfb-d202-442d-9733-c0079ebe8587';
+    const url = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706'
+      + '?format=json'
+      + '&keyword=' + encodeURIComponent(code)
+      + '&applicationId=' + appId
+      + '&hits=1'
+      + '&sort=+itemPrice'
+      + '&availability=1';
+    const r = await fetchTimed(url, 9000);
     if(!r.ok) return null;
-    const html = await r.text();
-    const dp = new DOMParser();
-    const doc = dp.parseFromString(html, 'text/html');
-
-    // 商品名：最初の商品タイトルを取得
-    let name = '';
-    const titleSelectors = [
-      '.searchresultitem .title a',
-      '[class*="item"] [class*="title"] a',
-      'h2[class*="title"]',
-      '.item_name',
-    ];
-    for(const s of titleSelectors) {
-      const el = doc.querySelector(s);
-      if(el) { name = el.textContent.trim(); break; }
+    const d = await r.json();
+    if(!d.Items || d.Items.length === 0) return null;
+    const item = d.Items[0].Item;
+    // 商品名のノイズ除去
+    let name = (item.itemName || '').trim();
+    // 【】や送料・セット情報などのノイズを除去
+    name = name.replace(/【[^】]*】/g, '').replace(/\[[^\]]*\]/g, '');
+    name = name.replace(/[ 　]+/g, ' ').trim();
+    // 長すぎる場合は最初の30文字（商品名の核心部分）
+    if(name.length > 50) {
+      // 「×」「/」「,」などの区切りより前を商品名とする
+      const cut = name.search(/[×\/,＋+]|\d+個|\d+本|\d+枚|\d+缶/);
+      if(cut > 4) name = name.substring(0, cut).trim();
     }
-    // OGタイトルにフォールバック（「楽天市場」の文字を除去）
-    if(!name) {
-      const og = doc.querySelector('meta[property="og:title"]');
-      if(og) name = (og.getAttribute('content') || '').replace(/楽天市場.*$/,'').replace(/【.*?】/g,'').trim();
-    }
-
-    // 商品画像
+    // 画像URL（楽天は複数枚あるので1枚目）
     let imageUrl = '';
-    const imgEl = doc.querySelector('.image img, [class*="item"] img, .searchresultitem img');
-    if(imgEl) imageUrl = imgEl.src || imgEl.getAttribute('data-src') || '';
-    if(!imageUrl) {
-      const ogImg = doc.querySelector('meta[property="og:image"]');
-      if(ogImg) imageUrl = ogImg.getAttribute('content') || '';
+    if(item.mediumImageUrls && item.mediumImageUrls.length > 0) {
+      imageUrl = item.mediumImageUrls[0].imageUrl || '';
+      // ?_ex=xxx を除去して高解像度版を使用
+      imageUrl = imageUrl.replace(/\?.*$/, '');
     }
-    // Rakuten画像URLを高解像度に変換
-    if(imageUrl) imageUrl = imageUrl.replace(/\?.*$/, '').replace(/_ex=\d+x\d+/,'');
-
     if(!name || name.length < 2) return null;
     return { name, imageUrl };
-  } catch(e) { return null; }
-}
-
-// ③ Yahoo!ショッピング（corsproxy.io経由）
-async function fetchYahooShopping(code) {
-  try {
-    const target = `https://shopping.yahoo.co.jp/search?p=${code}&view=grid`;
-    const proxy  = `https://corsproxy.io/?url=${encodeURIComponent(target)}`;
-    const r = await fetchTimed(proxy, 9000);
-    if(!r.ok) return null;
-    const html = await r.text();
-    const dp = new DOMParser();
-    const doc = dp.parseFromString(html, 'text/html');
-
-    let name = '';
-    // OGタイトルから商品名抽出
-    const og = doc.querySelector('meta[property="og:title"]');
-    if(og) {
-      name = (og.getAttribute('content') || '')
-        .replace(/Yahoo!ショッピング.*$/i, '')
-        .replace(/の検索結果.*$/,'')
-        .replace(/【.*?】/g,'')
-        .trim();
-    }
-    // 最初の商品名要素
-    if(!name || name.length < 2) {
-      const el = doc.querySelector('[class*="title"] a, [class*="name"] a');
-      if(el) name = el.textContent.trim();
-    }
-
-    let imageUrl = '';
-    const ogImg = doc.querySelector('meta[property="og:image"]');
-    if(ogImg) imageUrl = ogImg.getAttribute('content') || '';
-
-    if(!name || name.length < 2) return null;
-    return { name, imageUrl };
-  } catch(e) { return null; }
+  } catch(e) {
+    console.log('楽天API失敗:', e.message);
+    return null;
+  }
 }
 
 // メイン取得関数
@@ -647,36 +617,32 @@ async function fetchProduct(code) {
   const fromCSV = findInCSV(code);
   if(fromCSV) return {...fromCSV, fromCache:false};
 
-  // 3. COOP商品サイト（直接）+ OFF + 楽天 + Yahoo を並列実行
-  const [coop, off, rakuten, yahoo] = await Promise.allSettled([
+  // 3. COOP + 楽天API + Open Food Facts を並列実行
+  const [coop, rakuten, off] = await Promise.allSettled([
     fetchCOOP(code),
+    fetchRakutenAPI(code),
     fetchOFF(code),
-    fetchRakuten(code),
-    fetchYahooShopping(code),
   ]);
 
   const coopVal    = coop.status    === 'fulfilled' ? coop.value    : null;
-  const offVal     = off.status     === 'fulfilled' ? off.value     : null;
   const rakutenVal = rakuten.status === 'fulfilled' ? rakuten.value : null;
-  const yahooVal   = yahoo.status   === 'fulfilled' ? yahoo.value   : null;
+  const offVal     = off.status     === 'fulfilled' ? off.value     : null;
 
-  // 商品名の優先順：COOP > OFF > 楽天 > Yahoo
+  // 優先順：COOP（COOP商品確実）> 楽天API（日本商品最強）> OFF
   let name = '', imageUrl = '', source = '';
-  if(coopVal?.name)          { name = coopVal.name;    imageUrl = coopVal.imageUrl||'';    source='coop'; }
-  else if(offVal?.name)      { name = offVal.name;     imageUrl = offVal.imageUrl||'';     source='off'; }
-  else if(rakutenVal?.name)  { name = rakutenVal.name; imageUrl = rakutenVal.imageUrl||''; source='rakuten'; }
-  else if(yahooVal?.name)    { name = yahooVal.name;   imageUrl = yahooVal.imageUrl||'';   source='yahoo'; }
+  if(coopVal?.name)         { name = coopVal.name;    imageUrl = coopVal.imageUrl||'';    source='coop'; }
+  else if(rakutenVal?.name) { name = rakutenVal.name; imageUrl = rakutenVal.imageUrl||''; source='rakuten'; }
+  else if(offVal?.name)     { name = offVal.name;     imageUrl = offVal.imageUrl||'';     source='off'; }
 
-  // 画像だけ別ソースから補完（名前は取れたが画像がない場合）
+  // 名前は取れたが画像がない場合、他ソースから補完
   if(name && !imageUrl) {
-    if(coopVal?.imageUrl)    imageUrl = coopVal.imageUrl;
-    else if(rakutenVal?.imageUrl) imageUrl = rakutenVal.imageUrl;
-    else if(offVal?.imageUrl)    imageUrl = offVal.imageUrl;
-    else if(yahooVal?.imageUrl)  imageUrl = yahooVal.imageUrl;
+    if(rakutenVal?.imageUrl)  imageUrl = rakutenVal.imageUrl;
+    else if(coopVal?.imageUrl) imageUrl = coopVal.imageUrl;
+    else if(offVal?.imageUrl)  imageUrl = offVal.imageUrl;
   }
 
   if(name) {
-    console.log('取得成功['+source+']: '+name);
+    console.log('取得成功[' + source + ']: ' + name);
     return { name, imageUrl, dept: dept(name), fromCache: false };
   }
 
@@ -1269,6 +1235,23 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.querySelectorAll('.tab,.subtab').forEach(t=>t.classList.remove('active'));
   };
   document.getElementById('close-chatbot-btn').onclick=()=>{ document.getElementById('chatbot-area').style.display='none'; setTab(currentTab); };
+
+  // 楽天APIキー保存
+  window.saveRakutenKey = function() {
+    const val = document.getElementById('rakuten-key-in').value.trim();
+    if(val) {
+      localStorage.setItem('rakutenAppId', val);
+      document.getElementById('rakuten-key-in').value = '';
+      document.getElementById('rakuten-key-status').textContent = '設定済み✅';
+      flash('楽天APIキーを保存しました');
+    }
+  };
+  // APIキー状態表示
+  const storedKey = localStorage.getItem('rakutenAppId');
+  if(!storedKey) {
+    // デフォルトキーを保存
+    localStorage.setItem('rakutenAppId', 'a4188cfb-d202-442d-9733-c0079ebe8587');
+  }
 
   // 手動商品名入力のEnterキー
   document.getElementById('manual-name-in')?.addEventListener('keydown',e=>{ if(e.key==='Enter') applyManualName(); });
