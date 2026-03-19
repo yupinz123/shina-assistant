@@ -86,9 +86,12 @@ body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic Pr
 .res-info{flex:1}
 #res-name{font-size:.95rem;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:.25rem}
 .res-dept{font-size:.72rem;font-weight:700;padding:.18rem .55rem;border-radius:18px;display:inline-block;margin-bottom:.55rem}
-.res-dept.daily{background:rgba(236,72,153,.2);color:#ec4899}
+.res-dept.daily_jp{background:rgba(236,72,153,.2);color:#ec4899}
+.res-dept.daily_we{background:rgba(249,115,22,.2);color:#f97316}
 .res-dept.snack{background:rgba(168,85,247,.2);color:#a855f7}
 .res-dept.food{background:rgba(59,130,246,.2);color:#3B82F6}
+.res-dept.drink{background:rgba(6,182,212,.2);color:#06b6d4}
+.res-dept.paper{background:rgba(34,197,94,.2);color:#22c55e}
 .res-dept.other{background:rgba(107,114,128,.2);color:#6B7280}
 .qty-row{display:flex;align-items:center;gap:.45rem;margin-bottom:.55rem}
 .qty-lbl{font-size:.82rem;color:var(--text3)}
@@ -113,6 +116,9 @@ body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic Pr
 #manual-name-in{flex:1;background:var(--bg3);color:var(--text);border:1.5px solid #f59e0b;border-radius:7px;padding:.55rem .8rem;font-size:.9rem;font-family:inherit;outline:none}
 .manual-ok-btn{background:#f59e0b;color:#fff;border:none;border-radius:7px;padding:.55rem .9rem;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit}
 .manual-hint{font-size:.72rem;color:var(--text3);margin-top:.4rem}
+.dept-btns{display:flex;align-items:center;gap:.3rem;margin-top:.5rem;flex-wrap:wrap}
+.dept-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:18px;padding:.28rem .7rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
+.dept-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* 履歴 */
 .hist-area{margin-top:.5rem}
@@ -130,9 +136,12 @@ body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic Pr
 .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:.65rem;margin-bottom:.4rem}
 .prod-card{background:var(--bg2);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--border);padding:.65rem .45rem .75rem;display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;overflow:hidden;transition:transform var(--tr)}
 .prod-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px}
-.prod-card.daily::before{background:#ec4899}
+.prod-card.daily_jp::before{background:#ec4899}
+.prod-card.daily_we::before{background:#f97316}
 .prod-card.snack::before{background:#a855f7}
 .prod-card.food::before{background:#3B82F6}
+.prod-card.drink::before{background:#06b6d4}
+.prod-card.paper::before{background:#22c55e}
 .prod-card.other::before{background:#6B7280}
 .prod-card:active{transform:scale(.95)}
 .prod-card.hl{background:rgba(59,130,246,.14)}
@@ -298,12 +307,21 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
         <div class="known-badge" id="known-badge">⚡ キャッシュから即座に表示</div>
         <div class="ld" id="ld"><div class="spin"></div><span>商品情報を取得中...</span></div>
         <div class="manual-edit-area" id="manual-edit-area">
-          <p>📝 自動取得できませんでした。商品名を入力してください</p>
+          <p>📝 商品名を入力してください（次回から自動表示）</p>
           <div class="manual-edit-row">
-            <input id="manual-name-in" type="text" placeholder="例: コカ・コーラ 500ml">
+            <input id="manual-name-in" type="text" placeholder="例: シーチキンLフレーク 70g">
             <button class="manual-ok-btn" id="manual-ok-btn">決定</button>
           </div>
-          <p class="manual-hint">※次回から自動表示されます</p>
+          <div class="dept-btns" id="dept-btns">
+            <span style="font-size:.75rem;color:var(--text3);display:block;margin-bottom:.3rem">部門を選択:</span>
+            <button class="dept-btn active" data-dept="food">食品</button>
+            <button class="dept-btn" data-dept="daily_jp">和日配</button>
+            <button class="dept-btn" data-dept="daily_we">洋日配</button>
+            <button class="dept-btn" data-dept="snack">菓子</button>
+            <button class="dept-btn" data-dept="drink">飲料</button>
+            <button class="dept-btn" data-dept="paper">紙類</button>
+          </div>
+          <p class="manual-hint">※部門を選んで「決定」→「タスク追加」</p>
         </div>
       </div>
     </div>
@@ -369,8 +387,11 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
 // ================================================================
 const DRINK_ORDER = ['水','お茶','ジュース','炭酸','大型飲料','コーヒー','その他'];
 const PAPER_ORDER = ['キッチン','ティッシュ','トイレットペーパー'];
-const DAILY_KW = ['牛乳','乳','ヨーグルト','チーズ','豆腐','納豆','卵','たまご','惣菜','おにぎり','パン','弁当','刺身','寿司','サラダ','漬物','日配'];
-const SNACK_KW = ['チョコ','ポテト','せんべい','クッキー','スナック','ガム','キャンディ','飴','グミ','アイス','菓子','ビスケット','おかし','プリン','ゼリー'];
+const DAILY_JP_KW = ['牛乳','乳','ヨーグルト','チーズ','豆腐','納豆','卵','たまご','おにぎり','弁当','刺身','寿司','サラダ','漬物','惣菜','こんにゃく','練り物','豆'];
+const DAILY_WE_KW = ['パン','バター','マーガリン','ハム','ソーセージ','ベーコン','ウインナー','サラミ','チルド','ピザ','生パスタ'];
+const SNACK_KW   = ['チョコ','ポテト','せんべい','クッキー','スナック','ガム','キャンディ','飴','グミ','アイス','菓子','ビスケット','おかし','プリン','ゼリー','ランチパック','菓子パン'];
+const DRINK_PROD_KW = ['ml','ℓ','麦茶','緑茶','コーヒー','ジュース','炭酸','ウォーター','スポーツドリンク','ポカリ','コーラ','ペットボトル','缶コーヒー'];
+const PAPER_PROD_KW = ['ティッシュ','トイレットペーパー','キッチンペーパー','タオル','おむつ','ナプキン','洗剤','シャンプー','リンス','ボディソープ'];
 const RAKUTEN_APP_ID = 'a4188cfb-d202-442d-9733-c0079ebe8587';
 const COOP_PROXIES = [
   'https://api.allorigins.win/raw?url=',
@@ -426,12 +447,15 @@ function addHist(code, data) {
 // 部門判定
 // ================================================================
 function getDept(name) {
-  if (!name) return 'other';
-  if (DAILY_KW.some(k => name.includes(k))) return 'daily';
-  if (SNACK_KW.some(k => name.includes(k))) return 'snack';
+  if (!name) return 'food';
+  if (PAPER_PROD_KW.some(k => name.includes(k))) return 'paper';
+  if (DRINK_PROD_KW.some(k => name.includes(k))) return 'drink';
+  if (SNACK_KW.some(k => name.includes(k)))   return 'snack';
+  if (DAILY_WE_KW.some(k => name.includes(k))) return 'daily_we';
+  if (DAILY_JP_KW.some(k => name.includes(k))) return 'daily_jp';
   return 'food';
 }
-const DEPT_LABEL = { daily: '日配', snack: '菓子', food: '食品', other: 'その他' };
+const DEPT_LABEL = { daily_jp:'和日配', daily_we:'洋日配', food:'食品', snack:'菓子', drink:'飲料', paper:'紙類', other:'食品' };
 
 // ================================================================
 // CSV パーサー
@@ -509,35 +533,8 @@ async function fetchCOOP(code) {
   return null;
 }
 
-// 楽天全国スーパー直接アクセス（APIキー不要・CORS不要）
-// URL例: https://netsuper.rakuten.co.jp/beisia/item/{JANコード}/
+// 楽天市場API（公式・JANコード検索）
 async function fetchRakuten(code) {
-  // 複数のスーパーで試す
-  const stores = ['beisia', 'ohsakaya', 'maxvalu', 'seiyu'];
-  for (const store of stores) {
-    try {
-      const url = 'https://netsuper.rakuten.co.jp/' + store + '/item/' + code + '/';
-      const r = await timedFetch(url, 8000);
-      if (!r.ok) continue;
-      const html = await r.text();
-      // 商品名: h1タグから取得
-      const nm = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
-      if (!nm) continue;
-      let name = nm[1].trim();
-      if (!name || name.length < 2) continue;
-      // 画像URL: netsuper.r10s.jp の画像パターン
-      const im = html.match(/https:\/\/netsuper\.r10s\.jp\/item\/[^"'\s]+\.jpg/);
-      const imageUrl = im ? im[0].replace(/\?.*$/, '') : '';
-      console.log('[楽天スーパー] 取得成功(' + store + '):', name);
-      return { name, imageUrl };
-    } catch(e) { continue; }
-  }
-  // フォールバック: 楽天市場API
-  return fetchRakutenAPI(code);
-}
-
-// 楽天市場API（フォールバック）
-async function fetchRakutenAPI(code) {
   const appId = localStorage.getItem('rakutenAppId') || RAKUTEN_APP_ID;
   try {
     const url = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706'
@@ -545,10 +542,10 @@ async function fetchRakutenAPI(code) {
       + '&applicationId=' + appId
       + '&keyword=' + encodeURIComponent(code)
       + '&hits=3';
-    const r = await timedFetch(url, 9000);
+    const r = await timedFetch(url, 8000);
     if (!r.ok) return null;
     const d = await r.json();
-    if (d.error || !d.Items || d.Items.length === 0) return null;
+    if (d.error || !d.Items || !d.Items.length) return null;
     const item = d.Items[0].Item;
     let name = (item.itemName || '').trim();
     name = name.replace(/【[^】]*】/g, '').replace(/\s+/g, ' ').trim();
@@ -560,8 +557,7 @@ async function fetchRakutenAPI(code) {
     if (item.mediumImageUrls && item.mediumImageUrls.length > 0) {
       imageUrl = (item.mediumImageUrls[0].imageUrl || '').replace(/\?.*$/, '');
     }
-    if (!name || name.length < 2) return null;
-    return { name, imageUrl };
+    return (name && name.length >= 2) ? { name, imageUrl } : null;
   } catch(e) { return null; }
 }
 
@@ -575,9 +571,22 @@ async function fetchOFF(code) {
     const d = await r.json();
     if (d.status !== 1 || !d.product) return null;
     const p = d.product;
-    const name = (p.product_name_ja || p.product_name || p.brands || '').trim();
-    if (!name || name.length < 2) return null;
-    return { name, imageUrl: p.image_front_url || '' };
+    // 日本語名を優先、なければ英語名（英語のみの場合は採用しない）
+    const jaName = (p.product_name_ja || '').trim();
+    const enName = (p.product_name || '').trim();
+    const brand  = (p.brands || '').trim();
+    // 日本語名があればそれを使用
+    if (jaName && jaName.length >= 2) return { name: jaName, imageUrl: p.image_front_url || '' };
+    // 英語名のみの場合: ブランド名と組み合わせる（例:「Lipton Teabag Yellow label」）
+    // ただし全部英語の場合は採用しない（検索精度が悪い）
+    const hasJapanese = str => /[぀-ゟ゠-ヿ一-鿿]/.test(str);
+    if (enName && hasJapanese(enName)) return { name: enName, imageUrl: p.image_front_url || '' };
+    if (brand && hasJapanese(brand)) {
+      const combined = brand + (enName ? ' ' + enName : '');
+      return { name: combined, imageUrl: p.image_front_url || '' };
+    }
+    // 英語のみは採用しない（手動入力の方が正確）
+    return null;
   } catch(e) { return null; }
 }
 
@@ -775,12 +784,15 @@ function showResult(info, code) {
 function applyManualName() {
   const name = document.getElementById('manual-name-in').value.trim();
   if (!name) { alert('商品名を入力してください'); return; }
-  const d = getDept(name);
+  // 手動で選択した部門を使用（未選択なら名前から自動判定）
+  const activeBtn = document.querySelector('.dept-btn.active');
+  const d = activeBtn ? activeBtn.dataset.dept : getDept(name);
   const info = { name, imageUrl: curProd.imageUrl || '', dept: d };
   showResult(info, curProd.code);
   setCached(curProd.code, info);
   addHist(curProd.code, info);
   updCacheCnt();
+  showFlash('✅ 登録完了: ' + name);
 }
 
 function addScanned() {
@@ -1286,6 +1298,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('manual-in').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-manual').click(); });
   document.getElementById('manual-ok-btn').onclick = applyManualName;
   document.getElementById('manual-name-in').addEventListener('keydown', e => { if (e.key === 'Enter') applyManualName(); });
+  // 部門ボタン
+  document.querySelectorAll('.dept-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.dept-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
 
   // 写真登録
   document.getElementById('photo-in').addEventListener('change', e => {
