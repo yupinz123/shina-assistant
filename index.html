@@ -1236,8 +1236,15 @@ function renderTasks() {
   area.innerHTML = '';
   const normal = [], nc = [], carried = [];
   tasks.forEach(t => {
-    if (t.isScanned) return; // スキャン商品はスキャンタスク専用画面のみ
+    // スキャン商品はスキャンタスク専用画面のみ
+    if (t.isScanned) return;
+    // 飲料タブ：DRINK_ORDERカテゴリのみ
+    if (currentTab === 'drinks' && !DRINK_ORDER.includes(t.category)) return;
+    // 紙タブ：PAPER_ORDERカテゴリのみ
+    if (currentTab === 'paper' && !PAPER_ORDER.includes(t.category)) return;
+    // 検索フィルタ
     if (currentTab !== 'paper' && window.searchKw && !t.name.toLowerCase().includes(window.searchKw)) return;
+    // 紙カテゴリフィルタ
     if (currentTab === 'paper' && window.paperCat && t.category !== window.paperCat) return;
     if (t.status === 'carried') carried.push(t);
     else if (t.status === 'not-carried') nc.push(t);
@@ -1572,6 +1579,8 @@ function setTab(tab) {
     sc.style.display = 'none'; sa.style.display = '';
     pb.style.display = tab === 'paper' ? '' : 'none';
     sb.style.display = tab === 'paper' ? 'none' : '';
+    // スキャン専用タスク画面は必ず隠す
+    document.getElementById('scan-task-sec').style.display = 'none';
     const taskActive = document.getElementById('subtab-tasks').classList.contains('active');
     pl.style.display = taskActive ? 'none' : '';
     document.getElementById('task-list').style.display = taskActive ? '' : 'none';
