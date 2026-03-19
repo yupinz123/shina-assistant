@@ -244,8 +244,7 @@ label.set-btn{display:block;line-height:normal}
 .top-btn{position:fixed;right:14px;bottom:18px;z-index:500;background:var(--accent2);color:#fff;border:none;border-radius:50%;font-size:1.2rem;width:44px;height:44px;cursor:pointer;display:none;align-items:center;justify-content:center;font-weight:700}
 .top-btn.on{display:flex}
 
-/* チャットボット */
-#close-chatbot-btn{position:fixed;top:66px;left:10px;z-index:1500;background:var(--ng);color:#fff;border:none;border-radius:18px;font-size:.86rem;font-weight:700;padding:.55rem 1.1rem;cursor:pointer;font-family:inherit}
+
 
 @media(max-width:540px){
   .prod-grid{grid-template-columns:repeat(auto-fill,minmax(102px,1fr));gap:.5rem}
@@ -383,15 +382,17 @@ label.set-btn{display:block;line-height:normal}
     </div>
   </section>
 
+  <!-- スキャン専用タスク画面 -->
+  <section id="scan-task-sec" style="display:none">
+    <div class="sec-ttl" style="margin-top:0">📋 スキャンタスク</div>
+    <div id="scan-task-list"></div>
+  </section>
+
   <!-- 商品・タスクリスト -->
   <section id="prod-list"></section>
   <section id="task-list" style="display:none"></section>
 
-  <!-- チャットボット -->
-  <section id="chatbot-area" style="display:none">
-    <button id="close-chatbot-btn">← 戻る</button>
-    <iframe src="https://udify.app/chatbot/pc59V33QbQFkT2nh" style="width:100%;height:100%;min-height:700px" frameborder="0" allow="microphone"></iframe>
-  </section>
+
 
   <!-- 設定モーダル -->
   <div class="modal" id="cfg-modal">
@@ -411,7 +412,6 @@ label.set-btn{display:block;line-height:normal}
         <span class="set-val" id="cache-cnt">0件</span>
       </div>
       <div class="set-btns">
-        <button class="set-btn blue" id="btn-chat">💬 チャットサポート</button>
         <button class="set-btn" id="btn-code-mgr" style="background:#6366f1;color:#fff">🔗 コード管理</button>
         <button class="set-btn" id="btn-export" style="background:#059669;color:#fff">📤 データをエクスポート</button>
         <label class="set-btn" id="btn-import-lbl" style="background:#0284c7;color:#fff;text-align:center;cursor:pointer">
@@ -1115,6 +1115,10 @@ function addScanned() {
   taskCnt[code] += qty;
   saveTasks();
   renderTasks();
+  // スキャンタスク画面が表示中なら更新
+  if (document.getElementById('scan-task-sec').style.display !== 'none') {
+    renderScanTasks();
+  }
   showFlash('✅ タスクに追加 ×' + qty);
 }
 
@@ -1419,6 +1423,57 @@ function mkBtn(text, cls, onClick) {
 }
 
 // ================================================================
+// スキャンタスク描画（スキャンタブ専用）
+// ================================================================
+function renderScanTasks() {
+  const area = document.getElementById('scan-task-list');
+  area.innerHTML = '';
+  const scanTasks = tasks.filter(t => t.isScanned);
+  if (!scanTasks.length) {
+    area.innerHTML = '<p style="color:var(--text3);font-size:.9rem;text-align:center;padding:2rem">スキャンしたタスクがありません</p>';
+    return;
+  }
+  // ステータス別に分類
+  const normal   = scanTasks.filter(t => t.status === 'new');
+  const nc       = scanTasks.filter(t => t.status === 'not-carried');
+  const carried  = scanTasks.filter(t => t.status === 'carried');
+
+  if (normal.length) {
+    area.appendChild(mkEl('div', 'cat-hdg', '📦 未処理'));
+    normal.forEach(t => area.appendChild(mkScanTaskItem(t)));
+  }
+  if (nc.length) {
+    const box = mkSecList('⚠️ 未運搬', '');
+    nc.forEach(t => box.appendChild(mkScanTaskItem(t)));
+    area.appendChild(box);
+  }
+  if (carried.length) {
+    const box = mkSecList('✅ 運搬済', 'ok');
+    carried.forEach(t => box.appendChild(mkScanTaskItem(t)));
+    area.appendChild(box);
+  }
+}
+
+function mkScanTaskItem(t) {
+  const el = document.createElement('div');
+  el.className = 'task-item' + (t.status === 'carried' ? ' carried' : t.status === 'not-carried' ? ' nc' : '');
+  const l = document.createElement('div'); l.className = 'ti-l';
+  const img = document.createElement('img'); img.className = 'task-img';
+  img.src = t.imageUrl || ''; img.alt = '';
+  img.onerror = () => { img.onerror = null; img.src = ''; };
+  const info = document.createElement('div');
+  info.appendChild(mkEl('div', 'task-name', t.name));
+  info.appendChild(mkEl('div', 'task-badge', DEPT_LABEL[t.dept] || '食品'));
+  l.appendChild(img); l.appendChild(info);
+  const r = document.createElement('div'); r.className = 'ti-r';
+  r.appendChild(mkBtn('運搬済', 'btn-ok', () => { t.status = 'carried';     saveTasks(); renderScanTasks(); }));
+  r.appendChild(mkBtn('未運搬', 'btn-nc', () => { t.status = 'not-carried'; saveTasks(); renderScanTasks(); }));
+  r.appendChild(mkBtn('削除',   'btn-del', () => { delTask(t.taskUid); renderScanTasks(); }));
+  el.appendChild(l); el.appendChild(r);
+  return el;
+}
+
+// ================================================================
 // 履歴描画
 // ================================================================
 function renderHist() {
@@ -1505,9 +1560,18 @@ function setTab(tab) {
   if (tab === 'scanner') {
     sc.style.display = ''; pl.style.display = 'none';
     document.getElementById('task-list').style.display = 'none';
+    document.getElementById('scan-task-sec').style.display = 'none';
     sa.style.display = 'none';
-    document.getElementById('subtab-products').classList.add('active');
-    document.getElementById('subtab-tasks').classList.remove('active');
+    // サブタブの状態を確認してスキャン専用タスクを表示
+    const scanTaskActive = document.getElementById('subtab-tasks').classList.contains('active');
+    if (scanTaskActive) {
+      sc.style.display = 'none';
+      document.getElementById('scan-task-sec').style.display = '';
+      renderScanTasks();
+    } else {
+      document.getElementById('subtab-products').classList.add('active');
+      document.getElementById('subtab-tasks').classList.remove('active');
+    }
     renderHist(); updCacheCnt();
   } else {
     sc.style.display = 'none'; sa.style.display = '';
@@ -1541,19 +1605,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // サブタブ
   document.getElementById('subtab-products').onclick = () => {
-    document.getElementById('prod-list').style.display = '';
-    document.getElementById('task-list').style.display = 'none';
     document.getElementById('subtab-products').classList.add('active');
     document.getElementById('subtab-tasks').classList.remove('active');
-    if (currentTab === 'paper') { document.getElementById('pcat-wrap').style.display = ''; document.getElementById('search-box').style.display = 'none'; }
+    if (currentTab === 'scanner') {
+      // スキャンタブの商品ボタン → スキャン画面に戻る
+      document.getElementById('scanner-sec').style.display = '';
+      document.getElementById('scan-task-sec').style.display = 'none';
+      document.getElementById('prod-list').style.display = 'none';
+      document.getElementById('task-list').style.display = 'none';
+    } else {
+      document.getElementById('prod-list').style.display = '';
+      document.getElementById('task-list').style.display = 'none';
+      document.getElementById('scan-task-sec').style.display = 'none';
+      if (currentTab === 'paper') { document.getElementById('pcat-wrap').style.display = ''; document.getElementById('search-box').style.display = 'none'; }
+    }
   };
   document.getElementById('subtab-tasks').onclick = () => {
-    document.getElementById('prod-list').style.display = 'none';
-    document.getElementById('task-list').style.display = '';
     document.getElementById('subtab-products').classList.remove('active');
     document.getElementById('subtab-tasks').classList.add('active');
-    if (currentTab === 'paper') { document.getElementById('pcat-wrap').style.display = ''; document.getElementById('search-box').style.display = 'none'; }
-    renderTasks();
+    if (currentTab === 'scanner') {
+      // スキャンタブ専用タスク画面
+      document.getElementById('scanner-sec').style.display = 'none';
+      document.getElementById('scan-task-sec').style.display = '';
+      document.getElementById('prod-list').style.display = 'none';
+      document.getElementById('task-list').style.display = 'none';
+      renderScanTasks();
+    } else {
+      document.getElementById('prod-list').style.display = 'none';
+      document.getElementById('task-list').style.display = '';
+      document.getElementById('scan-task-sec').style.display = 'none';
+      if (currentTab === 'paper') { document.getElementById('pcat-wrap').style.display = ''; document.getElementById('search-box').style.display = 'none'; }
+      renderTasks();
+    }
   };
 
   // 紙カテゴリ
@@ -1669,13 +1752,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cfg-modal').classList.remove('on');
     showFlash('🗑 キャッシュ削除完了', '#f59e0b');
   };
-  document.getElementById('btn-chat').onclick = () => {
-    document.getElementById('cfg-modal').classList.remove('on');
-    ['prod-list', 'task-list', 'scanner-sec'].forEach(id => document.getElementById(id).style.display = 'none');
-    document.getElementById('chatbot-area').style.display = '';
-    document.querySelectorAll('.tab,.subtab').forEach(t => t.classList.remove('active'));
-  };
-  document.getElementById('close-chatbot-btn').onclick = () => { document.getElementById('chatbot-area').style.display = 'none'; setTab(currentTab); };
+
 
   // スキャナー
   document.getElementById('btn-start').onclick = initScanner;
@@ -1774,12 +1851,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const acts = document.createElement('div'); acts.className = 'code-item-actions';
       const editBtn = mkCodeActBtn('✏️ 編集', '', () => editRow.classList.toggle('on'));
       const delBtn  = mkCodeActBtn('🗑 削除', 'danger', () => {
-        if (!confirm('「' + (info.name||'このコード') + '」の紐付けを削除しますか？')) return;
+        const nm = info.name || 'このコード';
+        if (!confirm('「' + nm + '」を完全に削除しますか？\n\n・紐付け（JAN↔POP）\n・商品名・画像のキャッシュ\n・スキャン履歴\n\n全て削除されます。')) return;
+        // 紐付け削除
         const m = getCodeMap();
-        delete m[jan]; delete m[pop];
+        delete m[jan]; if(pop) delete m[pop];
         setCodeMap(m);
+        // キャッシュ削除
+        const c = getCache();
+        delete c[jan]; if(pop) delete c[pop];
+        setCache(c);
+        // スキャン履歴から削除
+        const h = getHist().filter(x => x.code !== jan && x.code !== pop);
+        setHist(h);
         renderCodeList();
-        showFlash('削除しました', '#f59e0b');
+        renderHist();
+        updCacheCnt();
+        showFlash('🗑 「' + nm + '」を削除しました', '#f59e0b');
       });
       acts.appendChild(editBtn); acts.appendChild(delBtn);
       // 編集行
