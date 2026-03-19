@@ -322,6 +322,15 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
         </div>
         <div class="known-badge" id="known-badge">⚡ キャッシュから即座に表示</div>
         <div class="ld" id="ld"><div class="spin"></div><span>商品情報を取得中...</span></div>
+        <!-- 手動入力エリア（自動取得失敗時） -->
+        <div id="manual-edit-area" style="display:none;margin-top:.8rem;padding:.8rem;background:rgba(245,158,11,.1);border:1.5px solid #f59e0b;border-radius:.7rem">
+          <p style="font-size:.8rem;color:#f59e0b;font-weight:700;margin-bottom:.5rem">📝 商品名を手動で入力してください</p>
+          <div style="display:flex;gap:.4rem">
+            <input id="manual-name-in" type="text" placeholder="例: コカ・コーラ 500ml" style="flex:1;background:var(--bg3);color:var(--text);border:1.5px solid #f59e0b;border-radius:7px;padding:.55rem .8rem;font-size:.9rem;font-family:inherit;outline:none">
+            <button onclick="applyManualName()" style="background:#f59e0b;color:#fff;border:none;border-radius:7px;padding:.55rem .9rem;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit">決定</button>
+          </div>
+          <p style="font-size:.72rem;color:var(--text3);margin-top:.4rem">※入力後は「タスク追加」ボタンが使えます。次回から自動表示されます。</p>
+        </div>
       </div>
     </div>
 
@@ -474,98 +483,49 @@ function fetchTimed(url, ms) {
   return fetch(url, {signal:ctrl.signal}).finally(()=>clearTimeout(timer));
 }
 
-// 名前クリーニング
-function cleanName(raw, code) {
-  if(!raw) return '';
-  let n = raw.trim();
-  const noise = [
-    /Yahoo!ショッピング.*/gi, /楽天市場.*/gi, /Amazon.*/gi,
-    /の商品をすべて見る.*/gi, /ショッピング検索.*/gi,
-    /\| .*/g, /- .*(?:円|株式会社|通販).*/g,
-    /\d+件/g, /検索結果.*/gi, /カテゴリ.*/gi,
-    /ランキング.*/gi, /通販.*/gi,
-    /【.*?】/g, /\[.*?\]/g,
-  ];
-  noise.forEach(p=>{ n=n.replace(p,'').trim(); });
-  if(code) n=n.replace(new RegExp(code,'g'),'').trim();
-  n = n.replace(/\s+/g,' ').trim();
-  if(n.length<2||n.length>80) return '';
-  return n;
+// CSVの既存商品とJANコード照合
+function findInCSV(code) {
+  const hit = products.find(p => p.janCode === code || p.popCode === code);
+  if(hit) return { name: hit.name, imageUrl: hit.imageUrl, dept: dept(hit.name), fromCSV: true };
+  return null;
 }
 
-// Open Food Facts（日本向け最も信頼性高）
+// Open Food Facts v2 API
 async function fetchOFF(code) {
   try {
-    const r = await fetchTimed(`https://world.openfoodfacts.org/api/v0/product/${code}.json`, 7000);
+    const url = `https://world.openfoodfacts.org/api/v2/product/${code}?fields=product_name,product_name_ja,brands,image_front_url,image_url&lc=ja`;
+    const r = await fetchTimed(url, 9000);
     if(!r.ok) return null;
     const d = await r.json();
-    if(d.status!==1||!d.product) return null;
+    if(d.status !== 1 || !d.product) return null;
     const p = d.product;
-    const name = p.product_name_ja||p.product_name||'';
-    if(!name) return null;
-    const imageUrl = p.image_front_url||p.image_url||'';
-    return { name: cleanName(name,code)||name, imageUrl };
-  } catch{ return null; }
-}
-
-// Yahoo!ショッピング（複数プロキシ試行）
-async function fetchYahoo(code) {
-  const proxies = [
-    `https://corsproxy.io/?${encodeURIComponent(`https://shopping.yahoo.co.jp/search?p=${code}&n=1`)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(`https://shopping.yahoo.co.jp/search?p=${code}&n=1`)}`,
-  ];
-  for(const url of proxies) {
-    try {
-      const r = await fetchTimed(url, 7000);
-      if(!r.ok) continue;
-      const html = await r.text();
-      const name = extractYahooName(html, code);
-      if(!name) continue;
-      const imageUrl = extractYahooImg(html);
-      return { name, imageUrl };
-    } catch{ continue; }
+    const name = (p.product_name_ja || p.product_name || p.brands || '').trim();
+    if(!name || name.length < 2) return null;
+    const imageUrl = p.image_front_url || p.image_url || '';
+    return { name, imageUrl };
+  } catch(e) {
+    console.log('OFF失敗:', e.message);
+    return null;
   }
-  return null;
-}
-
-function extractYahooName(html, code) {
-  if(!html) return null;
-  const dp = new DOMParser();
-  const doc = dp.parseFromString(html,'text/html');
-  const sels = ['[class*="ProductTitle"]','[class*="product-name"]','[class*="itemName"]'];
-  for(const s of sels){
-    const el=doc.querySelector(s);
-    if(el){ const n=cleanName(el.textContent,code); if(n&&n.length>3) return n; }
-  }
-  const og=doc.querySelector('meta[property="og:title"]');
-  if(og){ const n=cleanName(og.getAttribute('content'),code); if(n&&n.length>3) return n; }
-  return null;
-}
-function extractYahooImg(html) {
-  if(!html) return '';
-  const dp = new DOMParser();
-  const doc = dp.parseFromString(html,'text/html');
-  const og=doc.querySelector('meta[property="og:image"]');
-  if(og) return og.getAttribute('content')||'';
-  return '';
 }
 
 async function fetchProduct(code) {
+  // 1. キャッシュ（即時）
   const cached = getCached(code);
   if(cached) return {...cached, fromCache:true};
-  // 1. Open Food Facts
+
+  // 2. CSV内の既存商品と照合
+  const fromCSV = findInCSV(code);
+  if(fromCSV) return {...fromCSV, fromCache:false};
+
+  // 3. Open Food Facts
   const off = await fetchOFF(code);
-  if(off&&off.name) {
-    const d = dept(off.name);
-    return {name:off.name, imageUrl:off.imageUrl, dept:d, fromCache:false};
+  if(off && off.name) {
+    return { name: off.name, imageUrl: off.imageUrl, dept: dept(off.name), fromCache: false };
   }
-  // 2. Yahoo (複数プロキシ)
-  const y = await fetchYahoo(code);
-  if(y&&y.name) {
-    const d = dept(y.name);
-    return {name:y.name, imageUrl:y.imageUrl||'', dept:d, fromCache:false};
-  }
-  return {name:`コード: ${code}`, imageUrl:'', dept:'other', fromCache:false};
+
+  // 4. 取得失敗 → 手動入力モード
+  return { name: '', imageUrl: '', dept: 'food', fromCache: false, needsManual: true };
 }
 
 // --- バーコードスキャナー ---
@@ -713,11 +673,13 @@ async function lookup(code) {
   const ra=document.getElementById('res-area');
   ra.classList.add('on');
   document.getElementById('res-code').textContent='コード: '+code;
-  document.getElementById('res-name').textContent='取得中...';
+  document.getElementById('res-name').textContent='🔍 検索中...';
   document.getElementById('res-img').src='';
   document.getElementById('res-dept').textContent='';
   document.getElementById('known-badge').classList.remove('on');
+  hideManualEdit();
 
+  // キャッシュ即時表示
   const cached=getCached(code);
   if(cached){
     showResult(cached,code);
@@ -728,36 +690,65 @@ async function lookup(code) {
   document.getElementById('ld').classList.add('on');
   const info = await fetchProduct(code);
   document.getElementById('ld').classList.remove('on');
-  showResult(info,code);
-  if(info.name&&!info.name.startsWith('コード:')){
-    setCached(code,{name:info.name,imageUrl:info.imageUrl,dept:info.dept});
-    addHist(code,{name:info.name,imageUrl:info.imageUrl,dept:info.dept});
+
+  if(info.needsManual) {
+    // 自動取得失敗 → 手動入力UIを表示
+    showManualEdit(code);
+  } else {
+    showResult(info,code);
+    if(info.name) {
+      setCached(code,{name:info.name,imageUrl:info.imageUrl,dept:info.dept});
+      addHist(code,{name:info.name,imageUrl:info.imageUrl,dept:info.dept});
+    }
   }
   updCacheCnt();
 }
 
 function showResult(info,code){
-  document.getElementById('res-name').textContent=info.name||`コード:${code}`;
-  document.getElementById('res-img').src=info.imageUrl||'';
+  document.getElementById('res-name').textContent = info.name || '（名称未取得）';
+  document.getElementById('res-img').src = info.imageUrl || '';
   const dd=document.getElementById('res-dept');
-  dd.textContent=deptLbl(info.dept||'other');
-  dd.className=`res-dept ${info.dept||'other'}`;
-  curProd={code,name:info.name,imageUrl:info.imageUrl,dept:info.dept};
+  dd.textContent=deptLbl(info.dept||'food');
+  dd.className=`res-dept ${info.dept||'food'}`;
+  curProd={code, name:info.name, imageUrl:info.imageUrl||'', dept:info.dept||'food'};
   document.getElementById('res-qty').value=1;
+  hideManualEdit();
 }
 
 function showResArea(code){
   const ra=document.getElementById('res-area'); ra.classList.add('on');
   document.getElementById('res-code').textContent='コード: '+code;
-  document.getElementById('res-name').textContent='取得中...';
+  document.getElementById('res-name').textContent='🔍 検索中...';
   document.getElementById('res-img').src='';
+}
+
+// 手動入力UI表示（自動取得失敗時）
+function showManualEdit(code) {
+  document.getElementById('res-name').textContent='⚠️ 自動取得できませんでした';
+  curProd={code, name:'', imageUrl:'', dept:'food'};
+  const el = document.getElementById('manual-edit-area');
+  if(el) { el.style.display=''; document.getElementById('manual-name-in').value=''; document.getElementById('manual-name-in').focus(); }
+}
+function hideManualEdit() {
+  const el = document.getElementById('manual-edit-area');
+  if(el) el.style.display='none';
+}
+function applyManualName() {
+  const name = document.getElementById('manual-name-in').value.trim();
+  if(!name) { alert('商品名を入力してください'); return; }
+  const d = dept(name);
+  const info = {name, imageUrl: curProd.imageUrl||'', dept:d};
+  showResult(info, curProd.code);
+  setCached(curProd.code, info);
+  addHist(curProd.code, info);
+  updCacheCnt();
 }
 
 // タスク追加（スキャン）
 function addScanned(){
   const qty=parseInt(document.getElementById('res-qty').value)||1;
   const {code,name,imageUrl,dept:d}=curProd;
-  if(!name||name.startsWith('コード:')){ showAlert('商品名を取得できていません'); return; }
+  if(!name){ showAlert('商品名が未入力です。\n手動入力欄に商品名を入力して「決定」を押してください。'); return; }
   for(let i=0;i<qty;i++){
     tasks.push({id:code,name,imageUrl,category:d==='daily'?'日配':d==='snack'?'菓子':'その他',location:'スキャン',status:'new',taskUid:Date.now()+Math.random(),isScanned:true});
   }
@@ -1104,6 +1095,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.querySelectorAll('.tab,.subtab').forEach(t=>t.classList.remove('active'));
   };
   document.getElementById('close-chatbot-btn').onclick=()=>{ document.getElementById('chatbot-area').style.display='none'; setTab(currentTab); };
+
+  // 手動商品名入力のEnterキー
+  document.getElementById('manual-name-in')?.addEventListener('keydown',e=>{ if(e.key==='Enter') applyManualName(); });
 
   // スキャナー
   document.getElementById('btn-start').onclick=()=>initScanner();
