@@ -539,8 +539,7 @@ async function fetchCOOP(code) {
         name = h1all[0][1].replace(/<[^>]+>/g,'').trim();
       }
     }
-    name = name.replace(/?
-|	/g,' ').replace(/  +/g,' ').trim();
+    name = name.replace(/\s+/g,' ').trim();
     if(!name || name.length < 2) return null;
 
     // --- 商品画像URL抽出 ---
