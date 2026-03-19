@@ -1640,6 +1640,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const popIn = document.createElement('input'); popIn.className = 'code-inp';
       popIn.style.width = '100px'; popIn.placeholder = 'POPコード'; popIn.maxLength = 7;
       popIn.value = pop;
+      // 部門セレクト
+      const deptSel = document.createElement('select'); deptSel.className = 'code-inp';
+      deptSel.style.width = 'auto';
+      const deptOpts = [
+        ['food','食品'],['daily_jp','和日配'],['daily_we','洋日配'],
+        ['snack','菓子'],['drink','飲料'],['paper','紙類']
+      ];
+      deptOpts.forEach(([val, lbl]) => {
+        const o = document.createElement('option'); o.value = val; o.textContent = lbl;
+        if (val === (info.dept || 'food')) o.selected = true;
+        deptSel.appendChild(o);
+      });
       const saveBtn = document.createElement('button'); saveBtn.className = 'code-reg-btn';
       saveBtn.style.cssText = 'width:auto;padding:.45rem .9rem;font-size:.82rem';
       saveBtn.textContent = '保存';
@@ -1656,18 +1668,20 @@ document.addEventListener('DOMContentLoaded', () => {
           const codeA = newJan || jan; const codeB = newPop || pop;
           if (codeA && codeB) linkCodes(codeA, codeB);
           // 商品名更新
-          if (newName) {
-            const existing = getCached(codeA) || getCached(codeB) || {};
-            setCached(codeA, { ...existing, name: newName });
-            if (codeA !== codeB) setCached(codeB, { ...existing, name: newName });
-          }
+          const newDept = deptSel.value;
+          const existing = getCached(codeA) || getCached(codeB) || {};
+          const updated = { ...existing };
+          if (newName) updated.name = newName;
+          if (newDept) updated.dept = newDept;
+          setCached(codeA, updated);
+          if (codeA !== codeB) setCached(codeB, updated);
         }
         showFlash('✅ 保存しました');
         renderCodeList();
         editRow.classList.remove('on');
       };
       editRow.appendChild(nameIn); editRow.appendChild(janIn);
-      editRow.appendChild(popIn); editRow.appendChild(saveBtn);
+      editRow.appendChild(popIn); editRow.appendChild(deptSel); editRow.appendChild(saveBtn);
 
       el.appendChild(hdr); el.appendChild(badges); el.appendChild(acts); el.appendChild(editRow);
       list.appendChild(el);
