@@ -424,6 +424,15 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
 <button class="top-btn" id="top-btn">↑</button>
 <div class="flash" id="flash"><div class="flash-body" id="flash-body"></div></div>
 
+<!-- 部門ピッカー -->
+<div id="dept-picker" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;align-items:flex-end;justify-content:center">
+  <div style="background:var(--bg2);width:100%;max-width:480px;border-radius:1.2rem 1.2rem 0 0;padding:1.2rem 1rem 2rem;box-shadow:0 -4px 24px rgba(0,0,0,.4)">
+    <p style="font-size:.9rem;font-weight:700;color:var(--text);text-align:center;margin-bottom:1rem">部門を選択</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem" id="dept-picker-btns"></div>
+    <button onclick="closeDeptPicker()" style="margin-top:.9rem;width:100%;background:var(--bg3);color:var(--text2);border:none;border-radius:9px;padding:.7rem;font-size:.9rem;font-weight:600;cursor:pointer;font-family:inherit">キャンセル</button>
+  </div>
+</div>
+
 <!-- コード管理モーダル -->
 <div class="modal" id="code-mgr-modal">
   <div class="modal-body" style="max-width:500px">
@@ -1025,6 +1034,9 @@ function showResult(info, code) {
   const dd = document.getElementById('res-dept');
   dd.textContent = DEPT_LABEL[info.dept] || 'その他';
   dd.className = 'res-dept ' + (info.dept || 'food');
+  dd.title = 'タップで部門変更';
+  dd.style.cursor = 'pointer';
+  dd.onclick = () => openDeptPicker(info.dept || 'food');
   curProd = { code, name: info.name || '', imageUrl: info.imageUrl || '', dept: info.dept || 'food' };
   document.getElementById('res-qty').value = 1;
   document.getElementById('manual-edit-area').classList.remove('on');
@@ -1554,6 +1566,51 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('manual-in').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-manual').click(); });
   document.getElementById('manual-ok-btn').onclick = applyManualName;
   document.getElementById('manual-name-in').addEventListener('keydown', e => { if (e.key === 'Enter') applyManualName(); });
+  // 部門ピッカー
+  function openDeptPicker(currentDept) {
+    const picker = document.getElementById('dept-picker');
+    const btns = document.getElementById('dept-picker-btns');
+    btns.innerHTML = '';
+    const depts = [
+      ['food','食品','#3B82F6'],
+      ['daily_jp','和日配','#ec4899'],
+      ['daily_we','洋日配','#f97316'],
+      ['snack','菓子','#a855f7'],
+      ['drink','飲料','#06b6d4'],
+      ['paper','紙類','#22c55e'],
+    ];
+    depts.forEach(([val, lbl, color]) => {
+      const b = document.createElement('button');
+      b.textContent = lbl;
+      const isSelected = val === currentDept;
+      b.style.cssText = 'padding:.75rem;border-radius:9px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit;border:2.5px solid ' + color + ';background:' + (isSelected ? color : 'transparent') + ';color:' + (isSelected ? '#fff' : color) + ';transition:all .15s';
+      b.onclick = () => {
+        applyDeptChange(val);
+        closeDeptPicker();
+      };
+      btns.appendChild(b);
+    });
+    picker.style.display = 'flex';
+  }
+  function closeDeptPicker() {
+    document.getElementById('dept-picker').style.display = 'none';
+  }
+  function applyDeptChange(newDept) {
+    curProd.dept = newDept;
+    const dd = document.getElementById('res-dept');
+    dd.textContent = DEPT_LABEL[newDept] || 'その他';
+    dd.className = 'res-dept ' + newDept;
+    // キャッシュも更新
+    if (curProd.code) {
+      const ex = getCached(curProd.code) || {};
+      setCached(curProd.code, { ...ex, dept: newDept });
+    }
+    showFlash('部門を「' + DEPT_LABEL[newDept] + '」に変更しました');
+  }
+  document.getElementById('dept-picker').onclick = e => {
+    if (e.target === document.getElementById('dept-picker')) closeDeptPicker();
+  };
+
   // 部門ボタン
   document.querySelectorAll('.dept-btn').forEach(b => {
     b.addEventListener('click', () => {
