@@ -493,27 +493,49 @@ function findInCSV(code) {
 // ★ COOP商品サイトから直接取得（JANコードでページが確定）
 async function fetchCOOP(code) {
   try {
-    const url = `https://goods.jccu.coop/lineup/${code}.html`;
-    // CORSプロキシ経由（COOPサイトはCORS非対応）
-    const proxy = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+    const coopBase = 'https://goods.jccu.coop';
+    const url = coopBase + '/lineup/' + code + '.html';
+    const proxy = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
     const r = await fetchTimed(proxy, 9000);
     if(!r.ok) return null;
     const html = await r.text();
-    const dp = new DOMParser();
-    const doc = dp.parseFromString(html, 'text/html');
-    // 商品名：h1タグ（例: ＣＯ・ＯＰ トマトケチャップ ５００ｇ）
-    const h1 = doc.querySelector('h1');
-    if(!h1) return null;
-    const name = h1.textContent.trim();
+
+    // --- 商品名抽出 ---
+    // HTMLテキストから直接正規表現で抽出（DOMParserはプロキシ経由だと相対URL問題が出る）
+    let name = '';
+    // h1タグ内のテキストを抽出
+    const h1m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+    if(h1m) {
+      // HTMLタグを除去してテキストだけ取得
+      name = h1m[1].replace(/<[^>]+>/g,'').trim();
+      // 全角スペースや改行を整理
+      name = name.replace(/[
+	]/g,' ').replace(/\s+/g,' ').trim();
+    }
     if(!name || name.length < 2) return null;
-    // 商品画像：最初の com-images の img
+
+    // --- 商品画像URL抽出 ---
+    // com-imagesを含むsrc属性を正規表現で取得（相対URL問題を回避）
     let imageUrl = '';
-    const imgs = doc.querySelectorAll('img[src*="com-images"]');
-    if(imgs.length > 0) imageUrl = imgs[0].src || imgs[0].getAttribute('src') || '';
-    // 相対URLを絶対URLに変換
-    if(imageUrl && imageUrl.startsWith('/')) imageUrl = 'https://goods.jccu.coop' + imageUrl;
+    const imgMatches = html.match(/src="([^"]*com-images[^"]*)"/g);
+    if(imgMatches && imgMatches.length > 0) {
+      // src="..." から URLだけ取り出す
+      const rawSrc = imgMatches[0].replace(/^src="/, '').replace(/"$/, '');
+      // 相対URL → 絶対URLに変換
+      if(rawSrc.startsWith('http')) {
+        imageUrl = rawSrc;
+      } else if(rawSrc.startsWith('/')) {
+        imageUrl = coopBase + rawSrc;
+      } else {
+        imageUrl = coopBase + '/lineup/' + rawSrc;
+      }
+    }
+
     return { name, imageUrl };
-  } catch(e) { return null; }
+  } catch(e) {
+    console.log('COOP取得失敗:', e.message);
+    return null;
+  }
 }
 
 // ① Open Food Facts v2（商品名メイン）
