@@ -1236,6 +1236,7 @@ function renderTasks() {
   area.innerHTML = '';
   const normal = [], nc = [], carried = [];
   tasks.forEach(t => {
+    if (t.isScanned) return; // スキャン商品はスキャンタスク専用画面のみ
     if (currentTab !== 'paper' && window.searchKw && !t.name.toLowerCase().includes(window.searchKw)) return;
     if (currentTab === 'paper' && window.paperCat && t.category !== window.paperCat) return;
     if (t.status === 'carried') carried.push(t);
@@ -1243,14 +1244,8 @@ function renderTasks() {
     else normal.push(t);
   });
 
-  // 飲料タブ
+  // 飲料タブ（isScannedはスキャンタスク専用画面のみ表示）
   if (currentTab === 'drinks') {
-    const scanned = normal.filter(t => t.isScanned);
-    if (scanned.length) {
-      const h = mkEl('div', 'cat-hdg', '📷 スキャン商品');
-      area.appendChild(h);
-      scanned.forEach(t => area.appendChild(mkTaskItem(t)));
-    }
     DRINK_ORDER.forEach(cat => {
       const its = normal.filter(t => t.category === cat && !t.isScanned);
       if (!its.length) return;
