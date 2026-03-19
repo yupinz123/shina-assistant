@@ -229,6 +229,7 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
 .set-btn.blue{background:var(--accent);color:#fff}
 .set-btn.orange{background:#f97316;color:#fff}
 .set-btn.red{background:var(--ng);color:#fff}
+label.set-btn{display:block;line-height:normal}
 .modal-logo{text-align:center;margin:.9rem 0 .45rem}
 .modal-logo img{max-width:170px;border-radius:7px;opacity:.82}
 .modal-close{width:100%;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:9px;padding:.65rem;font-size:.9rem;font-weight:600;cursor:pointer;font-family:inherit;margin-top:.45rem}
@@ -412,6 +413,11 @@ input:checked+.tgl-sl::before{transform:translateX(19px)}
       <div class="set-btns">
         <button class="set-btn blue" id="btn-chat">💬 チャットサポート</button>
         <button class="set-btn" id="btn-code-mgr" style="background:#6366f1;color:#fff">🔗 コード管理</button>
+        <button class="set-btn" id="btn-export" style="background:#059669;color:#fff">📤 データをエクスポート</button>
+        <label class="set-btn" id="btn-import-lbl" style="background:#0284c7;color:#fff;text-align:center;cursor:pointer">
+          📥 データをインポート
+          <input type="file" id="btn-import" accept=".json" style="display:none">
+        </label>
         <button class="set-btn orange" id="btn-clr-cache">🗑 キャッシュ削除</button>
         <button class="set-btn red" id="btn-reset">🔄 タスクリセット</button>
       </div>
@@ -1576,11 +1582,92 @@ document.addEventListener('DOMContentLoaded', () => {
     tasks = []; oos = []; oosCnt = {}; oosRst = {};
     renderProds(); renderTasks(); document.getElementById('cfg-modal').classList.remove('on');
   };
+  // エクスポート
+  document.getElementById('btn-export').onclick = () => {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      pCache:   JSON.parse(localStorage.getItem('pCache')   || '{}'),
+      codeMap:  JSON.parse(localStorage.getItem('codeMap')  || '{}'),
+      scanHist: JSON.parse(localStorage.getItem('scanHist') || '[]'),
+      oos:      JSON.parse(localStorage.getItem('oos')      || '[]'),
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const date = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = 'shinadashi_data_' + date + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showFlash('📤 エクスポート完了');
+    document.getElementById('cfg-modal').classList.remove('on');
+  };
+
+  // インポート
+  document.getElementById('btn-import').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.version) throw new Error('形式が不正です');
+
+        // 既存データと統合（上書きではなくマージ）
+        const existCache  = JSON.parse(localStorage.getItem('pCache')   || '{}');
+        const existMap    = JSON.parse(localStorage.getItem('codeMap')  || '{}');
+        const existHist   = JSON.parse(localStorage.getItem('scanHist') || '[]');
+        const existOos    = JSON.parse(localStorage.getItem('oos')      || '[]');
+
+        // キャッシュ: インポートデータ優先でマージ
+        const mergedCache = { ...existCache, ...(data.pCache || {}) };
+        // コードマップ: マージ
+        const mergedMap   = { ...existMap,   ...(data.codeMap || {}) };
+        // 履歴: インポートを先頭に追加して重複除去
+        const importHist  = data.scanHist || [];
+        const existCodes  = new Set(existHist.map(h => h.code));
+        const newHist     = [
+          ...importHist,
+          ...existHist.filter(h => !importHist.some(ih => ih.code === h.code))
+        ].slice(0, 50);
+        // 在庫無: マージ
+        const mergedOos   = [...new Set([...existOos, ...(data.oos || [])])];
+
+        localStorage.setItem('pCache',   JSON.stringify(mergedCache));
+        localStorage.setItem('codeMap',  JSON.stringify(mergedMap));
+        localStorage.setItem('scanHist', JSON.stringify(newHist));
+        localStorage.setItem('oos',      JSON.stringify(mergedOos));
+
+        // 状態を再読み込み
+        oos = mergedOos;
+        updCacheCnt();
+        renderHist();
+        renderProds();
+        renderTasks();
+        document.getElementById('cfg-modal').classList.remove('on');
+
+        const cacheCount = Object.keys(mergedCache).length;
+        const mapCount   = Object.keys(mergedMap).length / 2 | 0;
+        showFlash('📥 インポート完了: 商品' + cacheCount + '件・紐付け' + mapCount + '件');
+      } catch(err) {
+        alert('インポート失敗: ' + err.message + '\n正しいエクスポートファイルを選択してください');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // キャッシュ削除（誤操作防止で2段階確認）
   document.getElementById('btn-clr-cache').onclick = () => {
-    if (!confirm('キャッシュとスキャン履歴を削除しますか？')) return;
+    const cnt = Object.keys(getCache()).length;
+    if (!confirm('商品キャッシュ（' + cnt + '件）とスキャン履歴を削除します。\n\nこの操作は取り消せません。\n先にエクスポートしておくことをお勧めします。\n\n本当に削除しますか？')) return;
+    if (!confirm('最終確認: キャッシュを完全に削除します。よろしいですか？')) return;
     ['pCache', 'scanHist'].forEach(k => localStorage.removeItem(k));
-    updCacheCnt(); renderHist(); document.getElementById('cfg-modal').classList.remove('on');
-    showFlash('キャッシュ削除完了', '#f59e0b');
+    updCacheCnt(); renderHist();
+    document.getElementById('cfg-modal').classList.remove('on');
+    showFlash('🗑 キャッシュ削除完了', '#f59e0b');
   };
   document.getElementById('btn-chat').onclick = () => {
     document.getElementById('cfg-modal').classList.remove('on');
