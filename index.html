@@ -1907,8 +1907,33 @@ document.addEventListener('DOMContentLoaded', () => {
           setCached(codeA, updated);
           if (codeA !== codeB) setCached(codeB, updated);
         }
+        // tasks・scanHist も同期更新
+        const codeA = newJan || jan;
+        const codeB = newPop || pop;
+        const affectedCodes = [codeA, codeB, jan, pop].filter(Boolean);
+        if (newName || deptSel.value) {
+          let changed = false;
+          tasks.forEach(t => {
+            if (affectedCodes.includes(t.id)) {
+              if (newName) t.name = newName;
+              if (deptSel.value) t.dept = deptSel.value;
+              changed = true;
+            }
+          });
+          if (changed) saveTasks();
+          // スキャン履歴も更新
+          const h = getHist().map(x => {
+            if (affectedCodes.includes(x.code)) {
+              return { ...x, ...(newName ? {name: newName} : {}), ...(deptSel.value ? {dept: deptSel.value} : {}) };
+            }
+            return x;
+          });
+          setHist(h);
+        }
         showFlash('✅ 保存しました');
         renderCodeList();
+        renderHist();
+        renderScanTasks();
         editRow.classList.remove('on');
       };
       editRow.appendChild(nameIn); editRow.appendChild(janIn);
