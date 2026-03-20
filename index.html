@@ -24,11 +24,11 @@ body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic Pr
 
 /* ヘッダー */
 .hdr{background:var(--bg2);position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.3);border-bottom:1px solid var(--border)}
-.hdr-in{max-width:960px;margin:0 auto;padding:.55rem .8rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.hdr-in{max-width:960px;margin:0 auto;padding:.45rem .6rem;display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}
 .hdr-ttl{font-size:1rem;font-weight:900;color:var(--accent);white-space:nowrap;display:flex;align-items:center;gap:.3rem}
 .tabs{display:flex;gap:.3rem;flex:1;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
-.tab{background:var(--bg3);color:var(--text2);border:1.5px solid transparent;border-radius:9px;padding:.4rem .85rem;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:all var(--tr);font-family:inherit}
+.tab{background:var(--bg3);color:var(--text2);border:1.5px solid transparent;border-radius:9px;padding:.45rem 1.1rem;font-size:.85rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:all var(--tr);font-family:inherit}
 .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 10px rgba(59,130,246,.35)}
 .tab#tab-scanner.active{background:linear-gradient(135deg,#6366f1,#8b5cf6);border-color:#6366f1}
 .hdr-right{display:flex;align-items:center;gap:.35rem;margin-left:auto}
@@ -258,7 +258,6 @@ label.set-btn{display:block;line-height:normal}
 
 <header class="hdr">
   <div class="hdr-in">
-    <div class="hdr-ttl"><span>🛒</span><span>品出しアシスタント</span></div>
     <nav class="tabs">
       <button id="tab-scanner" class="tab">📷 スキャン</button>
       <button id="tab-drinks" class="tab active">飲料</button>
@@ -365,9 +364,9 @@ label.set-btn{display:block;line-height:normal}
           </div>
           <div class="dept-btns" id="dept-btns">
             <span style="font-size:.75rem;color:var(--text3);display:block;margin-bottom:.3rem">部門を選択:</span>
-            <button class="dept-btn active" data-dept="food">食品</button>
-            <button class="dept-btn" data-dept="daily_jp">和日配</button>
             <button class="dept-btn" data-dept="daily_we">洋日配</button>
+            <button class="dept-btn" data-dept="daily_jp">和日配</button>
+            <button class="dept-btn active" data-dept="food">食品</button>
             <button class="dept-btn" data-dept="snack">菓子</button>
             <button class="dept-btn" data-dept="drink">飲料</button>
             <button class="dept-btn" data-dept="paper">紙類</button>
@@ -486,15 +485,7 @@ label.set-btn{display:block;line-height:normal}
   </div>
 </div>
 
-<!-- デバッグパネル（iPhoneで🐛ボタンを押すと表示） -->
-<div id="dbg-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.92);color:#0f0;font-size:11px;font-family:monospace;padding:.5rem;z-index:9999;max-height:40vh;overflow-y:auto;border-top:2px solid #0f0">
-  <div style="display:flex;justify-content:space-between;margin-bottom:.3rem">
-    <span style="color:#ff0;font-weight:bold">🐛 デバッグログ</span>
-    <button onclick="document.getElementById('dbg-panel').style.display='none'" style="background:#ff0;color:#000;border:none;border-radius:4px;padding:.2rem .5rem;font-size:11px;cursor:pointer">閉じる</button>
   </div>
-  <div id="dbg-log"></div>
-</div>
-<button id="dbg-btn" onclick="document.getElementById('dbg-panel').style.display='block'" style="position:fixed;left:14px;bottom:18px;z-index:500;background:#374151;color:#9CA3AF;border:none;border-radius:50%;width:36px;height:36px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">🐛</button>
 
 <script>
 'use strict';
@@ -726,31 +717,28 @@ async function fetchProduct(code) {
 // スキャナー
 // ================================================================
 async function initScanner() {
-  dbgLog('initScanner開始 UA=' + navigator.userAgent.substring(0,60));
+ 
   if ('BarcodeDetector' in window) {
-    dbgLog('BarcodeDetector: 対応 → ネイティブAPI使用');
-    try {
+      try {
       barcodeDetector = new BarcodeDetector({
         formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code']
       });
       await startCam();
       return;
-    } catch(e) { dbgLog('BarcodeDetector初期化失敗: ' + e.message); }
+    } catch(e) { }
   } else {
-    dbgLog('BarcodeDetector: 非対応 → ZXingへ');
-  }
+    }
   await loadZXingAndStart();
 }
 
 // ZXingを動的ロードしてスキャン開始
 async function loadZXingAndStart() {
-  if (window._zxingLoaded) { dbgLog('ZXing: キャッシュ済み'); await startCamZXing(); return; }
-  dbgLog('ZXing: ダウンロード開始...');
+  if (window._zxingLoaded) { await startCamZXing(); return; }
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
-    s.onload = async () => { dbgLog('ZXing: 読込成功(unpkg)'); window._zxingLoaded = true; await startCamZXing(); resolve(); };
-    s.onerror = () => { dbgLog('ZXing: unpkg失敗 → jsDelivrで再試行');
+    s.onload = async () => { window._zxingLoaded = true; await startCamZXing(); resolve(); };
+    s.onerror = () => {
       // CDN失敗時はjsDelivrで再試行
       const s2 = document.createElement('script');
       s2.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
@@ -800,8 +788,7 @@ async function startCamZXing() {
     scanLoopZXing();
 
   } catch(e) {
-    dbgLog('startCam エラー: ' + e.name + ' ' + e.message);
-    const msg = e.name === 'NotAllowedError'
+      const msg = e.name === 'NotAllowedError'
       ? 'カメラへのアクセスが拒否されました。\nSafariの設定 → このサイト → カメラ → 許可 に変更してください。'
       : 'カメラ起動失敗: ' + e.message;
     alert(msg);
@@ -827,17 +814,14 @@ function scanLoopZXing() {
 }
 
 async function startCam() {
-  dbgLog('startCam: getUserMedia開始');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
     });
-    dbgLog('getUserMedia: 成功');
-    const video = document.getElementById('scan-video');
+      const video = document.getElementById('scan-video');
     video.srcObject = stream;
     await video.play();
-    dbgLog('video.play: 成功');
-    try {
+      try {
       const devs = await navigator.mediaDevices.enumerateDevices();
       cameras = devs.filter(d => d.kind === 'videoinput');
     } catch(e) {}
@@ -1042,9 +1026,9 @@ function openDeptPicker(currentDept) {
   const btns = document.getElementById('dept-picker-btns');
   btns.innerHTML = '';
   const depts = [
-    ['food','食品','#3B82F6'],
-    ['daily_jp','和日配','#ec4899'],
     ['daily_we','洋日配','#f97316'],
+    ['daily_jp','和日配','#ec4899'],
+    ['food','食品','#3B82F6'],
     ['snack','菓子','#a855f7'],
     ['drink','飲料','#06b6d4'],
     ['paper','紙類','#22c55e'],
@@ -1427,6 +1411,8 @@ function mkBtn(text, cls, onClick) {
 // ================================================================
 // スキャンタスク描画（スキャンタブ専用）
 // ================================================================
+const SCAN_DEPT_ORDER = ['daily_we','daily_jp','food','snack','drink','paper'];
+
 function renderScanTasks() {
   const area = document.getElementById('scan-task-list');
   area.innerHTML = '';
@@ -1435,14 +1421,27 @@ function renderScanTasks() {
     area.innerHTML = '<p style="color:var(--text3);font-size:.9rem;text-align:center;padding:2rem">スキャンしたタスクがありません</p>';
     return;
   }
-  // ステータス別に分類
-  const normal   = scanTasks.filter(t => t.status === 'new');
-  const nc       = scanTasks.filter(t => t.status === 'not-carried');
-  const carried  = scanTasks.filter(t => t.status === 'carried');
+  const normal  = scanTasks.filter(t => t.status === 'new');
+  const nc      = scanTasks.filter(t => t.status === 'not-carried');
+  const carried = scanTasks.filter(t => t.status === 'carried');
 
+  // 未処理: 部門別に表示
   if (normal.length) {
-    area.appendChild(mkEl('div', 'cat-hdg', '📦 未処理'));
-    normal.forEach(t => area.appendChild(mkScanTaskItem(t)));
+    // 部門順にグループ化
+    const deptGroups = {};
+    normal.forEach(t => {
+      const d = t.dept || 'food';
+      if (!deptGroups[d]) deptGroups[d] = [];
+      deptGroups[d].push(t);
+    });
+    const orderedDepts = [
+      ...SCAN_DEPT_ORDER.filter(d => deptGroups[d]),
+      ...Object.keys(deptGroups).filter(d => !SCAN_DEPT_ORDER.includes(d))
+    ];
+    orderedDepts.forEach(dept => {
+      area.appendChild(mkEl('div', 'cat-hdg', DEPT_LABEL[dept] || dept));
+      deptGroups[dept].forEach(t => area.appendChild(mkScanTaskItem(t)));
+    });
   }
   if (nc.length) {
     const box = mkSecList('⚠️ 未運搬', '');
@@ -1465,7 +1464,6 @@ function mkScanTaskItem(t) {
   img.onerror = () => { img.onerror = null; img.src = ''; };
   const info = document.createElement('div');
   info.appendChild(mkEl('div', 'task-name', t.name));
-  info.appendChild(mkEl('div', 'task-badge', DEPT_LABEL[t.dept] || '食品'));
   l.appendChild(img); l.appendChild(info);
   const r = document.createElement('div'); r.className = 'ti-r';
   r.appendChild(mkBtn('運搬済', 'btn-ok', () => { t.status = 'carried';     saveTasks(); renderScanTasks(); }));
@@ -1506,20 +1504,6 @@ function renderHist() {
 // ================================================================
 // UI ユーティリティ
 // ================================================================
-// デバッグログ（iPhoneでも画面内に表示）
-function dbgLog(msg) {
-  console.log(msg);
-  const el = document.getElementById('dbg-log');
-  if (!el) return;
-  const line = document.createElement('div');
-  line.style.borderBottom = '1px solid #1a3a1a';
-  line.style.padding = '.15rem 0';
-  line.textContent = new Date().toLocaleTimeString('ja') + ' ' + msg;
-  el.insertBefore(line, el.firstChild);
-  // 最大50行
-  while (el.children.length > 50) el.removeChild(el.lastChild);
-}
-
 function showFlash(msg, bg = '#22c55e') {
   const f = document.getElementById('flash');
   const fb = document.getElementById('flash-body');
@@ -1581,9 +1565,11 @@ function setTab(tab) {
     sb.style.display = tab === 'paper' ? 'none' : '';
     // スキャン専用タスク画面は必ず隠す
     document.getElementById('scan-task-sec').style.display = 'none';
-    const taskActive = document.getElementById('subtab-tasks').classList.contains('active');
-    pl.style.display = taskActive ? 'none' : '';
-    document.getElementById('task-list').style.display = taskActive ? '' : 'none';
+    // タブ切替時は必ず「商品」サブタブに戻す
+    document.getElementById('subtab-products').classList.add('active');
+    document.getElementById('subtab-tasks').classList.remove('active');
+    pl.style.display = '';
+    document.getElementById('task-list').style.display = 'none';
     loadProducts(tab);
   }
 }
