@@ -147,7 +147,7 @@ body{background:var(--bg);color:var(--text);font-family:'Hiragino Kaku Gothic Pr
 .code-act-btn{background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:.28rem .65rem;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
 .code-act-btn:hover{border-color:var(--accent);color:var(--accent)}
 .code-act-btn.danger:hover{border-color:var(--ng);color:var(--ng)}
-.code-edit-row{display:none;gap:.3rem;margin-top:.5rem;flex-wrap:wrap}
+.code-edit-row{display:none;gap:.3rem;margin-top:.5rem;flex-wrap:wrap;align-items:flex-start}
 .code-edit-row.on{display:flex}
 .dept-btns{display:flex;align-items:center;gap:.3rem;margin-top:.5rem;flex-wrap:wrap}
 .dept-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:18px;padding:.28rem .7rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all var(--tr)}
@@ -1901,9 +1901,11 @@ document.addEventListener('DOMContentLoaded', () => {
           // 商品名更新
           const newDept = deptSel.value;
           const existing = getCached(codeA) || getCached(codeB) || {};
+          const newImageUrl = imgUrlIn.value.trim();
           const updated = { ...existing };
           if (newName) updated.name = newName;
           if (newDept) updated.dept = newDept;
+          if (newImageUrl) updated.imageUrl = newImageUrl;
           setCached(codeA, updated);
           if (codeA !== codeB) setCached(codeB, updated);
         }
@@ -1913,10 +1915,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const affectedCodes = [codeA, codeB, jan, pop].filter(Boolean);
         if (newName || deptSel.value) {
           let changed = false;
+          const newImageUrl2 = imgUrlIn.value.trim();
           tasks.forEach(t => {
             if (affectedCodes.includes(t.id)) {
               if (newName) t.name = newName;
               if (deptSel.value) t.dept = deptSel.value;
+              if (newImageUrl2) t.imageUrl = newImageUrl2;
               changed = true;
             }
           });
@@ -1924,7 +1928,12 @@ document.addEventListener('DOMContentLoaded', () => {
           // スキャン履歴も更新
           const h = getHist().map(x => {
             if (affectedCodes.includes(x.code)) {
-              return { ...x, ...(newName ? {name: newName} : {}), ...(deptSel.value ? {dept: deptSel.value} : {}) };
+              return {
+                ...x,
+                ...(newName      ? {name: newName}           : {}),
+                ...(deptSel.value? {dept: deptSel.value}     : {}),
+                ...(newImageUrl2 ? {imageUrl: newImageUrl2}  : {}),
+              };
             }
             return x;
           });
@@ -1936,6 +1945,37 @@ document.addEventListener('DOMContentLoaded', () => {
         renderScanTasks();
         editRow.classList.remove('on');
       };
+      // 画像プレビュー＋変更ボタン
+      const imgWrap = document.createElement('div');
+      imgWrap.style.cssText = 'width:100%;display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem';
+      const imgPrev = document.createElement('img');
+      imgPrev.src = info.imageUrl || '';
+      imgPrev.style.cssText = 'width:64px;height:64px;object-fit:cover;border-radius:8px;background:var(--bg2);border:1.5px solid var(--border);flex-shrink:0';
+      imgPrev.onerror = () => { imgPrev.onerror=null; imgPrev.src=''; };
+      const imgRight = document.createElement('div');
+      imgRight.style.cssText = 'display:flex;flex-direction:column;gap:.35rem;flex:1';
+      // URLで変更
+      const imgUrlIn = document.createElement('input');
+      imgUrlIn.className = 'code-inp'; imgUrlIn.placeholder = '画像URLを入力';
+      imgUrlIn.value = info.imageUrl || '';
+      imgUrlIn.oninput = () => { imgPrev.src = imgUrlIn.value; };
+      // ファイルで変更
+      const imgFileLbl = document.createElement('label');
+      imgFileLbl.style.cssText = 'display:flex;align-items:center;gap:.4rem;background:var(--bg2);border:1.5px dashed var(--border);border-radius:7px;padding:.38rem .7rem;font-size:.78rem;color:var(--text2);cursor:pointer;font-weight:700';
+      imgFileLbl.textContent = '📁 ファイルから選択';
+      const imgFileIn = document.createElement('input');
+      imgFileIn.type = 'file'; imgFileIn.accept = 'image/*'; imgFileIn.style.display = 'none';
+      imgFileIn.onchange = e => {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => { imgPrev.src = ev.target.result; imgUrlIn.value = ev.target.result; };
+        reader.readAsDataURL(file);
+      };
+      imgFileLbl.appendChild(imgFileIn);
+      imgRight.appendChild(imgUrlIn); imgRight.appendChild(imgFileLbl);
+      imgWrap.appendChild(imgPrev); imgWrap.appendChild(imgRight);
+
+      editRow.appendChild(imgWrap);
       editRow.appendChild(nameIn); editRow.appendChild(janIn);
       editRow.appendChild(popIn); editRow.appendChild(deptSel); editRow.appendChild(saveBtn);
 
